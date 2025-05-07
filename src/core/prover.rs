@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use rayon::prelude::*;
 
+use crate::circuits::circuit_registry;
 use crate::utils::logger::*;
 use crate::types::*;
 use crate::{
@@ -216,6 +217,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     log_success!("Proved all batch circuits successfully!");
     progress.print_progress_bar();
 
+
     // create the merkle tree leaf nodes
     let mut leaf_nodes = Vec::new();
     for leaf_hashes in merkle_leafs {
@@ -228,27 +230,31 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     // create all the merkle tree structure (and populate the leafs)
     let mut merkle_tree = MerkleTree::new_from_leafs(leaf_nodes, 1, true);
 
+    // create the circuit registry
+    let batch_circuit_digest = batch_circuit.circuit_data.verifier_only.circuit_digest.clone();
+    let mut circuit_registry = CircuitRegistry::new(batch_circuit, &ledger.asset_prices);
+
     // populate the batch nodes
     let batch_nodes = merkle_tree.get_nodes_from_depth(merkle_tree.depth - 1);
-
     let mut count = 0;
     let batch_proofs_length = batch_proofs.len();
 
-    let hash_offset = BatchCircuit::get_root_hash_offset(asset_count);
-    let hash_size = batch_proofs[count].public_inputs[hash_offset.clone()].len() * 8; // number of Field elements (64-bit) * 8 
-    
     for node in batch_nodes {
-        // check if it is a padding node
-        if count >= batch_proofs_length {
-            // add zeroed hash if so
-            let zeroed_hash = vec![0u8; hash_size];
-            node.set_hash(zeroed_hash.clone());
-            continue;
-        }
+        let proof = {
+            // check if it is a padding node
+            if count >= batch_proofs_length {
+                // get empty proof if so
+                circuit_registry.get_empty_proof(batch_circuit_digest).unwrap()
+            } else {
+                // otherwise get the proof from the batch proofs
+                &batch_proofs[count]
+            }
+        };
+        
 
         // get the hashes elements from the proof
-        
-        let hash_elements = batch_proofs[count].public_inputs[hash_offset.clone()].to_vec();
+        let hash_offset = BatchCircuit::get_root_hash_offset(asset_count);
+        let hash_elements = proof.public_inputs[hash_offset.clone()].to_vec();
 
         // get and set hash bytes
         let hash_bytes = pis_to_hash_bytes::<F, D>(&hash_elements);
@@ -264,11 +270,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     );
     progress.print_progress_bar();
 
-    // create the circuit registry
-    let mut circuit_registry = CircuitRegistry::new(batch_circuit, &ledger.asset_prices);
-
     // prove batch circuit recursively and populate the rest of the merkle tree
-
     progress.clear_bar();
     log_info!("Starting the recursive proving...");
 
