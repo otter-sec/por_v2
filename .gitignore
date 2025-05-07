@@ -1,0 +1,8 @@
+/target
+Cargo.lock
+
+final_proof.json
+inclusion_proofs
+inclusion_proof_*.json
+merkle_tree.json
+private_ledger.json
