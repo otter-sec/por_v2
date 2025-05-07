@@ -37,7 +37,7 @@ pub const RECURSIVE_CIRCUIT_CONFIG: CircuitConfig = CircuitConfig {
     use_base_arithmetic_gate: true,
     security_bits: 100,
     num_challenges: 2,
-    zero_knowledge: true, // NEED TO BE ZERO KNOWLEDGE TO PREVENT REVEALING SENSITIVE INFORMATION
+    zero_knowledge: false, // NEED TO BE ZERO KNOWLEDGE TO PREVENT REVEALING SENSITIVE INFORMATION
     max_quotient_degree_factor: 8,
     fri_config: FriConfig {
         rate_bits: 3,

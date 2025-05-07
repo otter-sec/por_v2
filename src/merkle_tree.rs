@@ -77,18 +77,21 @@ impl MerkleTree {
         // if batch is true, chunk the leafs into BATCH_SIZE length chunks --> only in the first depth
         let mut padded_nodes = Vec::new();
         if batch {
-            chunks = leafs.chunks(BATCH_SIZE); // batches are already padded to be multiple of BATCH_SIZE
+            // account leafs are already padded with BATCH_SIZE, but we need to pad the batch_circuit nodes
+            chunks = leafs.chunks(BATCH_SIZE);           
         } else {
+            // must pad to be multiple of RECURSIVE_SIZE (if it is not the root)
             chunks = leafs.chunks(RECURSIVE_SIZE);
+        }
 
-            // pad to be multiple of RECURSIVE_SIZE
-            if chunks.len() % RECURSIVE_SIZE != 0 {
-                let padding_size = RECURSIVE_SIZE - (chunks.len() % RECURSIVE_SIZE);
-                for _ in 0..padding_size {
-                    padded_nodes.push(Node::new(None));
-                }
+        // pad to be multiple of RECURSIVE_SIZE
+        if chunks.len() % RECURSIVE_SIZE != 0 {
+            let padding_size = RECURSIVE_SIZE - (chunks.len() % RECURSIVE_SIZE);
+            for _ in 0..padding_size {
+                padded_nodes.push(Node::new(None));
             }
         }
+
         for chunk in chunks {
             let mut node = Node::new(None);
 
@@ -185,10 +188,14 @@ impl MerkleTree {
             return false
         }
 
+        println!("Num of children: {}", root_node.children.as_ref().unwrap().len());
+
         // verify if the hash is the same as the hash of the children (Poseidon)
         let children_hashes = root_node.children.as_ref().unwrap().iter()
             .filter_map(|child| child.hash.clone())
             .collect::<Vec<_>>();
+
+        println!("Num of children hashes: {}", children_hashes.len());
 
         let hash = hash_n_subhashes::<F, D>(&children_hashes).to_bytes();
         if root_node.hash.as_ref().unwrap() != &hash {

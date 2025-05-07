@@ -230,11 +230,25 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
 
     // populate the batch nodes
     let batch_nodes = merkle_tree.get_nodes_from_depth(merkle_tree.depth - 1);
+
     let mut count = 0;
+    let batch_proofs_length = batch_proofs.len();
+
+    let hash_offset = BatchCircuit::get_root_hash_offset(asset_count);
+    let hash_size = batch_proofs[count].public_inputs[hash_offset.clone()].len() * 8; // number of Field elements (64-bit) * 8 
+    
     for node in batch_nodes {
+        // check if it is a padding node
+        if count >= batch_proofs_length {
+            // add zeroed hash if so
+            let zeroed_hash = vec![0u8; hash_size];
+            node.set_hash(zeroed_hash.clone());
+            continue;
+        }
+
         // get the hashes elements from the proof
-        let hash_offset = BatchCircuit::get_root_hash_offset(asset_count);
-        let hash_elements = batch_proofs[count].public_inputs[hash_offset].to_vec();
+        
+        let hash_elements = batch_proofs[count].public_inputs[hash_offset.clone()].to_vec();
 
         // get and set hash bytes
         let hash_bytes = pis_to_hash_bytes::<F, D>(&hash_elements);
