@@ -23,6 +23,8 @@ use std::time::Instant;
 use types::*;
 use utils::logger::*;
 
+
+#[cfg(target_family = "unix")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
