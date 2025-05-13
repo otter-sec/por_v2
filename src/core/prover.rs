@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use rayon::prelude::*;
 
-use crate::circuits::circuit_registry;
 use crate::utils::logger::*;
 use crate::types::*;
 use crate::{
@@ -177,6 +176,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     let mut batch_proofs = Vec::new();
 
     let mut merkle_leafs = Vec::new();
+    let mut account_nonces = Vec::new();
 
     // split the account into chunks of BATCH_SIZE and prove all chunks
     let mut count = 0;
@@ -189,7 +189,14 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
         for i in 0..chunk.len() {
             let userhash = ledger.hashes[count * BATCH_SIZE as usize + i].clone();
             let balances = chunk[i].clone();
-            let hash = hash_account(&balances, userhash);
+            
+            // generate a random nonce as security against brute force attacks to discover user balances
+            // MAKE SURE THIS ITERATION IS NOT PARALLELIZED, OTHERWISE THE NONCES VECTOR
+            // WILL NOT BE ORDERED CORRECTLY
+            let nonce = rand::random::<u64>();
+            account_nonces.push(nonce);
+            
+            let hash = hash_account(&balances, userhash, nonce);
             leaf_hashes.push(hash);
         }
 
@@ -320,19 +327,18 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     };
 
     log_success!("Created final proof successfully!");
-    log_info!("Serializing final proof and merkle tree into disk...");
-
-    // the idea was to only verify the partial tree in the global verification (WE DONT NEED THIS)
-    // let partial_tree = merkle_tree.get_merkle_tree_exclude_leaves();
+    log_info!("Serializing final proof, merkle tree and nonces into disk...");
 
     let final_proof_json = serde_json::to_string(&final_proof).unwrap();
     let merkle_tree_json = serde_json::to_string(&merkle_tree).unwrap();
-    // let partial_tree_json = serde_json::to_string(&partial_tree).unwrap();
 
     // write the final proof and merkle tree to files
     std::fs::write("final_proof.json", final_proof_json).unwrap();
     std::fs::write("merkle_tree.json", merkle_tree_json).unwrap();
-    // std::fs::write("partial_merkle_tree.json", partial_tree_json).unwrap();
+
+    // create private_nonces.json
+    let nonces_json = serde_json::to_string(&account_nonces).unwrap();
+    std::fs::write("private_nonces.json", nonces_json).unwrap();
 
     log_success!("Serialization completed successfully!");
 
@@ -342,6 +348,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
 pub fn prove_user_inclusion(
     user_index: usize,
     user_hash: String,
+    nonce: u64,
     merkle_tree: &MerkleTree,
     ledger: &Ledger,
 ) -> Result<InclusionProof> {
@@ -356,6 +363,7 @@ pub fn prove_user_inclusion(
         user_balances: user_balances.clone(),
         merkle_proof: merkle_proof,
         root_hash: merkle_tree.root.hash().clone().unwrap(),
+        nonce: nonce
     };
 
     Ok(inclusion_proof)
@@ -364,12 +372,14 @@ pub fn prove_user_inclusion(
 pub fn prove_user_inclusion_by_hash(
     user_hash: String,
     merkle_tree: MerkleTree,
+    nonces: Vec<u64>,
     ledger: Ledger,
 ) -> Result<InclusionProof> {
     // get the user index from the hash
     let user_index = ledger.hashes.iter().position(|x| *x == user_hash).unwrap();
+    let user_nonce = nonces[user_index];
 
-    prove_user_inclusion(user_index, user_hash, &merkle_tree, &ledger)
+    prove_user_inclusion(user_index, user_hash, user_nonce, &merkle_tree, &ledger)
 }
 
 // pub fn prove_inclusion_all(ledger: &Ledger, final_proof: &FinalProof, mut merkle_tree: MerkleTree) -> Result<()> {
@@ -397,6 +407,7 @@ pub fn prove_user_inclusion_by_hash(
 pub fn prove_inclusion_all(
     ledger: &Ledger,
     merkle_tree: &MerkleTree,
+    nonces: Vec<u64>,
 ) -> Result<()>
 {
     let total_hashes = ledger.hashes.len();
@@ -421,6 +432,7 @@ pub fn prove_inclusion_all(
             let inclusion_proof = prove_user_inclusion(
                 index,
                 userhash.clone(),
+                nonces[index],
                 merkle_tree,
                 ledger,
             )?;

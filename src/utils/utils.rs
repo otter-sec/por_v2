@@ -77,7 +77,7 @@ pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
 }
 
 // hash account balances and userhash
-pub fn hash_account(balances: &Vec<i64>, userhash: String) -> HashOut<GoldilocksField> {
+pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOut<GoldilocksField> {
     // convert everything to GoldilocksField
     let mut hash_input = Vec::new();
     for balance in balances {
@@ -91,6 +91,10 @@ pub fn hash_account(balances: &Vec<i64>, userhash: String) -> HashOut<Goldilocks
         let num = u64::from_str_radix(hex, 16).unwrap();
         hash_input_hex.push(GoldilocksField::from_canonical_u64(num));
     }
+
+    // convert nonce to GoldilocksField
+    let nonce_field = GoldilocksField::from_canonical_u64(nonce);
+    hash_input.push(nonce_field);
 
     PoseidonHash::hash_no_pad(hash_input.as_slice())
 }

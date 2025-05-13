@@ -95,6 +95,9 @@ The `prove` subcommand will generate the final proof and the merkle tree necessa
 
 - final_proof.json --> zk recursive final proof
 - merkle_tree.json --> the merkle tree
+- private_nonces.json --> nonces that were used during the hash of the merkle tree leaves to prevent brute force attacks
+
+> WARNING: DO NOT DISCLOSE PRIVATE_NONCES.JSON PUBLICLY SINCE IT IS A MEASURE OF DEFENSE AGAINST BRUTE FORCE AND WILL BE BYPASSABLE IF PUBLICLY AVAILABLE
 
 ### Verify
 
@@ -122,6 +125,8 @@ This subcommand generates an inclusion proof of the specified users. It bundles 
 
 > **WARNING: THE INCLUSION PROOF SHOULD NOT BE PUBLIC. EACH PROOF MUST BE SHARED WITH THE RELATED USER ONLY. THE FILE CONTAINS THE USER ACCOUNT BALANCE INFORMATION, WHICH MUST BE KEPT SECRET.**
 
+To run this command, the `merkle_tree.json`, `fial_proof.json`, `private_ledger.json` and `private_nonces.json` must be in the current directory.
+
 ### Verify inclusion
 
 This subcommand searches for all files in the current directory with the `inclusion_proof_*.json` pattern and verifies the inclusion proof. The verification steps are the following:
@@ -143,7 +148,7 @@ The file `config.rs` contains some configurations that can be changed to improve
 
 ### Compiling the code
 
-Plonky2 uses some hardware acceleration features that is only available in the nightly build of rust. To build the code, you should change the rust version to nightly and then build the code:
+Plonky2 uses some hardware acceleration features that are only available in the nightly build of rust. To build the code, you should change the rust version to nightly and then build the code:
 
 ```bash
 rustup override set nightly

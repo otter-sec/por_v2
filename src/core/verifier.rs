@@ -253,6 +253,7 @@ pub fn verify_user_inclusion(final_proof: FinalProof, inclusion_proof: Inclusion
     let account_hash = hash_account(
         &inclusion_proof.user_balances,
         inclusion_proof.user_hash.clone(),
+        inclusion_proof.nonce
     )
     .to_bytes();
 

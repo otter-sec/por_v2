@@ -52,6 +52,7 @@ pub struct MerkleProof{
 pub struct InclusionProof{
     pub user_balances: Vec<i64>,
     pub user_hash: String,
+    pub nonce: u64,
     pub merkle_proof: MerkleProof,
     #[serde(serialize_with = "base64::serialize", deserialize_with = "base64::deserialize")]
     pub root_hash: Vec<u8>,

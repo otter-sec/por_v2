@@ -5,3 +5,4 @@ inclusion_proofs
 inclusion_proof_*.json
 merkle_tree.json
 private_ledger.json
+private_nonces.json

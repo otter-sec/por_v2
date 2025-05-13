@@ -108,9 +108,13 @@ enum Commands {
 #[derive(Args, Debug, Clone)]
 #[clap(group = clap::ArgGroup::new("inclusion_target").required(true))]
 struct ProveInclusionArgs {
+    // daemonize the process to be a server
+    #[clap(long, short, group = "inclusion_target")]
+    daemon: bool,
+
     /// The hash of the user to prove inclusion for
     #[clap(long, group = "inclusion_target")]
-    userhash: Option<String>, // Make userhash optional since it's part of a group
+    userhash: Option<String>,
 
     /// Prove inclusion for all users
     #[clap(long, group = "inclusion_target")]
@@ -154,8 +158,16 @@ fn main() -> Result<()> {
             prove_global(ledger)?;
         }
         Commands::ProveInclusion(args) => {
+            // create the inclusion_proofs directory
+            let _ = std::fs::create_dir_all("inclusion_proofs");
+
+            // check if flag daemon is set
+            
+
+
+            // if not daemonize
             log_info!(
-                "Reading and deserializing proof, merkle tree and ledger... This might take a while"
+                "Reading and deserializing proof, merkle tree, ledger and nonces... This might take a while"
             );
             let merkle_tree_file = std::fs::read_to_string("merkle_tree.json")?;
             let merkle_tree: MerkleTree = serde_json::from_str(&merkle_tree_file)?;
@@ -166,20 +178,21 @@ fn main() -> Result<()> {
             // Assert the configuration of the final proof
             assert_config(&final_proof);
 
+            // deserialize nonces
+            let nonces_file = std::fs::read_to_string("private_nonces.json")?;
+            let nonces: Vec<u64> = serde_json::from_str(&nonces_file)?;
+
             let ledger = get_ledger_values_from_file("private_ledger.json");
             log_success!("Reading and deserializing completed!");
 
-            // create the inclusion_proofs directory
-            let _ = std::fs::create_dir_all("inclusion_proofs");
-
             if args.all {
                 log_info!("Proving inclusion for all users...");
-                prove_inclusion_all(&ledger, &merkle_tree)?;
+                prove_inclusion_all(&ledger, &merkle_tree, nonces)?;
                 log_success!("Successfully generated inclusion proofs for all users!");
             } else if let Some(userhash) = &args.userhash {
                 log_info!("Proving inclusion for user hash: {}", userhash);
                 let inclusion_proof =
-                    prove_user_inclusion_by_hash(userhash.clone(), merkle_tree, ledger)?;
+                    prove_user_inclusion_by_hash(userhash.clone(), merkle_tree, nonces, ledger)?;
 
                 let inclusion_filename =
                     format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
@@ -209,10 +222,8 @@ fn main() -> Result<()> {
             let final_proof: FinalProof = serde_json::from_str(&final_proof_file)
                 .context(format_error("Failed to deserialize final_proof.json"))?;
 
-
             assert_config(&final_proof);
-            
-            // Define your static regex here
+
             let pattern = r"^inclusion_proof_.*\.json$";
             let re = Regex::new(pattern).context(format_error("Failed to create regex"))?;
 
