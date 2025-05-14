@@ -1,4 +1,4 @@
-name: build-release
+name: Build and Release
 
 on:
   push:
@@ -7,90 +7,39 @@ on:
 
 jobs:
   release:
-    name: Release All Targets
-    if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/tags/test-release'
-    runs-on: macos-latest
+    name: Release - ${{ matrix.platform.os-name }}
+    strategy:
+      matrix:
+        platform:
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-gnu
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
+
+          - os-name: macOS-aarch64
+            runs-on: macOS-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install Rust toolchain and cross
-        shell: bash
-        run: |
-          curl -sSfL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --targets x86_64-unknown-linux-gnu,aarch64-apple-darwin,x86_64-apple-darwin,x86_64-pc-windows-msvc
-          export PATH="$HOME/.cargo/bin:$PATH"
-          cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build for linux-x86_64
-        shell: bash
-        run: cross build --locked --release --target x86_64-unknown-linux-gnu
-      - name: Package linux-x86_64
-        shell: bash
-        run: |
-          mkdir -p release-binaries/linux-x86_64
-          cp target/x86_64-unknown-linux-gnu/release/plonky2_por release-binaries/linux-x86_64/plonky2_por
-          cd release-binaries/linux-x86_64
-          tar czvf porv2-Linux-x86_64.tar.gz plonky2_por
-          cd ../..
-
-      - name: Build for macos-arm64
-        shell: bash
-        run: cargo build --locked --release --target aarch64-apple-darwin
-      - name: Package macos-arm64
-        shell: bash
-        run: |
-          mkdir -p release-binaries/macos-arm64
-          cp target/aarch64-apple-darwin/release/plonky2_por release-binaries/macos-arm64/plonky2_por
-          cd release-binaries/macos-arm64
-          tar czvf porv2-Darwin-aarch64.tar.gz plonky2_por
-          cd ../..
-
-      - name: Build for macos-x86_64
-        shell: bash
-        run: cargo build --locked --release --target x86_64-apple-darwin
-      - name: Package macos-x86_64
-        shell: bash
-        run: |
-          mkdir -p release-binaries/macos-x86_64
-          cp target/x86_64-apple-darwin/release/plonky2_por release-binaries/macos-x86_64/plonky2_por
-          cd release-binaries/macos-x86_64
-          tar czvf porv2-Darwin-x86_64.tar.gz plonky2_por
-          cd ../..
-
-      - name: Build for windows-x86_64
-        shell: bash
-        run: cross build --locked --release --target x86_64-pc-windows-gnu
-      - name: Package windows-x86_64
-        shell: bash
-        run: |
-          mkdir -p release-binaries/windows-x86_64
-          cp target/x86_64-pc-windows-gnu/release/plonky2_por.exe release-binaries/windows-x86_64/plonky2_por.exe
-          cd release-binaries/windows-x86_64
-          7z a porv2-Windows-x86_64.zip plonky2_por.exe
-          cd ../..
-
-      - name: Create combined artifact directory
-        shell: bash
-        run: mkdir release-artifacts
-
-      - name: Copy packaged artifacts
-        shell: bash
-        run: |
-          cp release-binaries/linux-x86_64/porv2-linux-x86_64.tar.gz release-artifacts/
-          cp release-binaries/macos-arm64/porv2-darwin-aarch64.tar.gz release-artifacts/
-          cp release-binaries/macos-x86_64/porv2-darwin-x86_64.tar.gz release-artifacts/
-          cp release-binaries/windows-x86_64/porv2-windows-x86_64.zip release-artifacts/
-
-      - name: Publish release artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/checkout@v4
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v1
         with:
-          name: release-binaries
-          path: release-artifacts/*
-        if: github.ref == 'refs/tags/test-release'
-
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v1
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v0
         with:
-          draft: true
-          files: release-artifacts/*
-        if: startsWith( github.ref, 'refs/tags/v' )
+          executable-name: plonky2_por
+          target: ${{ matrix.platform.target }}
