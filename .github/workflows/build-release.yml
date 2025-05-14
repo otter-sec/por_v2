@@ -76,10 +76,10 @@ jobs:
       - name: Copy packaged artifacts
         shell: bash
         run: |
-          cp release-binaries/linux-x86_64/porv2-Linux-x86_64.tar.gz release-artifacts/
-          cp release-binaries/macos-arm64/porv2-Darwin-aarch64.tar.gz release-artifacts/
-          cp release-binaries/macos-x86_64/porv2-Darwin-x86_64.tar.gz release-artifacts/
-          cp release-binaries/windows-x86_64/porv2-Windows-x86_64.zip release-artifacts/
+          cp release-binaries/linux-x86_64/porv2-linux-x86_64.tar.gz release-artifacts/
+          cp release-binaries/macos-arm64/porv2-darwin-aarch64.tar.gz release-artifacts/
+          cp release-binaries/macos-x86_64/porv2-darwin-x86_64.tar.gz release-artifacts/
+          cp release-binaries/windows-x86_64/porv2-windows-x86_64.zip release-artifacts/
 
       - name: Publish release artifacts
         uses: actions/upload-artifact@v3
