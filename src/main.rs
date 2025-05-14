@@ -7,12 +7,9 @@ pub mod types;
 pub mod utils;
 
 use anyhow::{Context, Result};
-use signal_hook::consts::{SIGHUP, SIGKILL};
-use signal_hook::{consts::SIGINT, iterator::Signals};
 use circuits::recursive_circuit::RecursiveCircuit;
 use clap::{Args, Parser, Subcommand};
 use config::*;
-use daemonize::Daemonize;
 use core::prover::*;
 use core::verifier::{verify_root, verify_user_inclusion};
 use std::fs::File;
@@ -29,6 +26,11 @@ use utils::logger::*;
 
 #[cfg(target_family = "unix")]
 use core::server::*;
+#[cfg(target_family = "unix")]
+use daemonize::Daemonize;
+#[cfg(target_family = "unix")]
+use signal_hook::{consts::{SIGINT, SIGHUP}, iterator::Signals};
+
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -167,8 +169,9 @@ fn main() -> Result<()> {
             // create the inclusion_proofs directory
             let _ = std::fs::create_dir_all("inclusion_proofs");
 
-            // if userhash and socket exists, just send the hash to the server (works only on unix)
-            if (cfg!(target_family = "unix") && args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
+            // if userhash and socket exists, just send the hash to the server (only on unix)
+            #[cfg(target_family = "unix")]
+            if (args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
                 log_info!("Prover server is running, sending hash to the server...");
                 send_hash_to_server(args.userhash.as_ref().unwrap())?;
 
@@ -195,8 +198,9 @@ fn main() -> Result<()> {
             let ledger = get_ledger_values_from_file("private_ledger.json");
             log_success!("Reading and deserializing completed!");
 
-            // create the server if daemon is true
-            if args.daemon && cfg!(target_family = "unix") {
+            // create the server if daemon is true (only on unix)
+            #[cfg(target_family = "unix")]
+            if args.daemon {
                 let stdout = File::create("/tmp/por_daemon.out").unwrap();
                 let stderr = File::create("/tmp/por_daemon.err").unwrap();
 
@@ -290,7 +294,7 @@ fn main() -> Result<()> {
                         log_info!("Found and verifying inclusion proof file: {}", filename);
 
                         // Read and deserialize the inclusion proof file
-                        let inclusion_proof_file =
+                        let inclusion_proof_file: String =
                             std::fs::read_to_string(entry.path()).context(format_error(
                                 &format!("Failed to read inclusion proof file: {}", filename),
                             ))?;

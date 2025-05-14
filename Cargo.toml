@@ -9,9 +9,7 @@ base64 = "0.22.1"
 bigdecimal = "0.4.8"
 chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
-daemonize = "0.5.0"
 env_logger = "0.11.8"
-interprocess = "2.2.3"
 plonky2 = "1.0.2"
 rand = "0.9.1"
 rayon = "1.10.0"
@@ -20,5 +18,10 @@ serde = "1.0.219"
 serde_json = "1.0.140"
 signal-hook = "0.3.18"
 
+[patch.crates-io]
+crunchy = { git = "https://github.com/nmathewson/crunchy.git", branch = "cross-compilation-fix" }
+
 [target.'cfg(unix)'.dependencies]
 jemallocator = "0.5.4"
+daemonize = "0.5.0"
+interprocess = "2.2.3"
