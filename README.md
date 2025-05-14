@@ -119,13 +119,29 @@ The `prove-inclusion` subcommand should be run by the CEX party since it require
 1. Proving inclusion of a certain user --> it can be used to generate the proof on-demand.
 2. Proving inclusion of all users --> it can be used to generate the proofs all-at-once and only serve static files to the user
 
-To prove inclusion of a specific user, you can use the `--userhash <hash>` flag. It will find the user by its hash in `private_ledger.json` and generate the proof. If you want to generate all the proofs at once, simply use the `--all` flag.
-
 This subcommand generates an inclusion proof of the specified users. It bundles all the necessary information to verify if the user were included in the merkle tree: all sibling and parent hashes + account balances (used to calculate the leaf hash).
+
+**Proving on-demand**
+
+Since the `private_ledger.json` and `merkle_tree.json` are usually big files, it is not optimal to deserialize it every time we need to prove a user inclusion. So we have two methods to prove users on-demand:
+
+1. The optimal way --> creates a server based on a UNIX socket, receives the user hashes via this socket and generates the proof. Since it is a server, it deserializes the ledger and the merkle tree once and keep them in memory.
+2. The easy way --> reads and deserializes the merkle tree and the ledger every time that you need to prove an inlcusion. This may be usable when the ledger/merkle tree is not big and/or during testing.
+
+To start the server you just need to run `./plonky2_por prove-inclusion -d`, that will run the server in daemon mode.
+
+To prove inclusion of a specific user, you can use the `--userhash <hash>` flag. It will check if the prover server is running and send the hash to it, which will generate the proof (method 1). If it is not running, it will deserialize the files, find the user by its hash and generate the proof (method 2).
+
+> NOTE: The server method will only work in UNIX-like systems. It is not available for Windows or other OS family.
+
+**Proving all users**
+
+To prove all users at one-shot, simply put the `--all` flag. It will create all proofs inside the `inclusion_proofs/` directory, which may consume a lot of disk space depending on the amount of users.
+
 
 > **WARNING: THE INCLUSION PROOF SHOULD NOT BE PUBLIC. EACH PROOF MUST BE SHARED WITH THE RELATED USER ONLY. THE FILE CONTAINS THE USER ACCOUNT BALANCE INFORMATION, WHICH MUST BE KEPT SECRET.**
 
-To run this command, the `merkle_tree.json`, `fial_proof.json`, `private_ledger.json` and `private_nonces.json` must be in the current directory.
+To run this command, the `merkle_tree.json`, `final_proof.json`, `private_ledger.json` and `private_nonces.json` must be in the current directory.
 
 ### Verify inclusion
 
