@@ -44,3 +44,4 @@ jobs:
         with:
           executable-name: plonky2_por
           target: ${{ matrix.platform.target }}
+          changes-file: ""
