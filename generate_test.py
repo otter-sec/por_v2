@@ -27,7 +27,7 @@ ledgers_set = {}
 assets_set = {}
 
 NUMBER_OF_ASSETS = 10
-NUMBER_OF_CUSTOMERS = 2**15
+NUMBER_OF_CUSTOMERS = 2**12
 
 # generate test_assets
 

@@ -371,37 +371,21 @@ pub fn prove_user_inclusion(
 
 pub fn prove_user_inclusion_by_hash(
     user_hash: String,
-    merkle_tree: MerkleTree,
-    nonces: Vec<u64>,
-    ledger: Ledger,
+    merkle_tree: &MerkleTree,
+    nonces: &Vec<u64>,
+    ledger: &Ledger,
 ) -> Result<InclusionProof> {
     // get the user index from the hash
-    let user_index = ledger.hashes.iter().position(|x| *x == user_hash).unwrap();
+    let user_index = ledger.hashes.iter().position(|x| *x == user_hash);
+    if user_index.is_none() {
+        return Err(anyhow::anyhow!("User hash not found in ledger"));
+    }
+    let user_index = user_index.unwrap();
+
     let user_nonce = nonces[user_index];
 
-    prove_user_inclusion(user_index, user_hash, user_nonce, &merkle_tree, &ledger)
+    prove_user_inclusion(user_index, user_hash, user_nonce, merkle_tree, ledger)
 }
-
-// pub fn prove_inclusion_all(ledger: &Ledger, final_proof: &FinalProof, mut merkle_tree: MerkleTree) -> Result<()> {
-//     let mut progress = ProveInclusionProgress::new(ledger.hashes.len());
-//     progress.print_progress_bar();
-
-//     for (index, userhash) in ledger.hashes.iter().enumerate() {
-//         let inclusion_proof =
-//             prove_user_inclusion(index, userhash.clone(), &merkle_tree, &final_proof, &ledger)?;
-
-//         let inclusion_filename = format!("inclusion_proof_{}.json", userhash);
-//         let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?;
-//         std::fs::write(inclusion_filename, inclusion_proof_json)?;
-
-//         progress.update_progress();
-//     }
-
-//     progress.clear_bar();
-
-//     Ok(())
-// }
-
 
 // Create inclusion proofs for all users using parallel processing
 pub fn prove_inclusion_all(

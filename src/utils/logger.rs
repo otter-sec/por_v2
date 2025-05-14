@@ -168,7 +168,7 @@ macro_rules! log_success {
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        println!("\x1b[31m[-] {}\x1b[0m", format!($($arg)*));
+        eprintln!("\x1b[31m[-] {}\x1b[0m", format!($($arg)*));
     };
 }
 

@@ -7,11 +7,16 @@ pub mod types;
 pub mod utils;
 
 use anyhow::{Context, Result};
+use signal_hook::consts::{SIGHUP, SIGKILL};
+use signal_hook::{consts::SIGINT, iterator::Signals};
 use circuits::recursive_circuit::RecursiveCircuit;
 use clap::{Args, Parser, Subcommand};
 use config::*;
+use daemonize::Daemonize;
 use core::prover::*;
+use core::server::*;
 use core::verifier::{verify_root, verify_user_inclusion};
+use std::fs::File;
 use merkle_tree::*;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::hash_types::HashOut;
@@ -22,7 +27,6 @@ use regex::Regex;
 use std::time::Instant;
 use types::*;
 use utils::logger::*;
-
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -161,17 +165,21 @@ fn main() -> Result<()> {
             // create the inclusion_proofs directory
             let _ = std::fs::create_dir_all("inclusion_proofs");
 
-            // check if flag daemon is set
-            
+            // if userhash and socket exists, just send the hash to the server
+            if (args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
+                log_info!("Prover server is running, sending hash to the server...");
+                send_hash_to_server(args.userhash.as_ref().unwrap())?;
 
+                return Ok(());
+            }
 
-            // if not daemonize
+            // otherwise, we will need to deserialize all files
             log_info!(
                 "Reading and deserializing proof, merkle tree, ledger and nonces... This might take a while"
             );
             let merkle_tree_file = std::fs::read_to_string("merkle_tree.json")?;
             let merkle_tree: MerkleTree = serde_json::from_str(&merkle_tree_file)?;
-            
+
             let final_proof_file = std::fs::read_to_string("final_proof.json")?;
             let final_proof: FinalProof = serde_json::from_str(&final_proof_file)?;
 
@@ -185,6 +193,46 @@ fn main() -> Result<()> {
             let ledger = get_ledger_values_from_file("private_ledger.json");
             log_success!("Reading and deserializing completed!");
 
+            // create the server if daemon is true
+            if args.daemon {
+                let stdout = File::create("/tmp/por_daemon.out").unwrap();
+                let stderr = File::create("/tmp/por_daemon.err").unwrap();
+
+                let cwd = std::env::current_dir().unwrap();
+
+                let daemonize = Daemonize::new()
+                    .pid_file("/tmp/por.pid") // Every method except `new` and `start`
+                    .working_directory(cwd) // Set the working directory
+                    .stdout(stdout) // Redirect stdout
+                    .stderr(stderr); // Redirect stderr
+
+                log_info!("Starting the prover server in the background...");
+                match daemonize.start() {
+                    Ok(_) => {
+                        let mut signals = Signals::new([SIGINT, SIGHUP])?;
+
+                        std::thread::spawn(move || {
+                            for sig in signals.forever() {
+                                // remove the socket and pid file if the process is killed
+                                if sig == SIGINT || sig == SIGHUP {
+                                    log_info!("Daemon process killed, removing socket file...");
+                                    let _ = std::fs::remove_file(SOCKET_PATH);
+                                    let _ = std::fs::remove_file("/tmp/por.pid");
+                                    
+                                    // Exit the process
+                                    std::process::exit(0);
+                                }
+                            }
+                        });
+
+                        create_local_server(merkle_tree, nonces, ledger)?
+                    },
+                    Err(e) => log_error!("Error while starting daemon process. Check if there are other process already being executed."),
+                }
+
+                return Ok(());
+            }
+
             if args.all {
                 log_info!("Proving inclusion for all users...");
                 prove_inclusion_all(&ledger, &merkle_tree, nonces)?;
@@ -192,7 +240,7 @@ fn main() -> Result<()> {
             } else if let Some(userhash) = &args.userhash {
                 log_info!("Proving inclusion for user hash: {}", userhash);
                 let inclusion_proof =
-                    prove_user_inclusion_by_hash(userhash.clone(), merkle_tree, nonces, ledger)?;
+                    prove_user_inclusion_by_hash(userhash.clone(), &merkle_tree, &nonces, &ledger)?;
 
                 let inclusion_filename =
                     format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
