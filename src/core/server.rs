@@ -1,6 +1,6 @@
 use crate::*;
 use anyhow::{Context, Result};
-use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Name, prelude::*};
+use interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, ListenerOptions, Name};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::Arc;
@@ -8,7 +8,6 @@ use std::thread;
 use std::time::Duration;
 
 pub const SOCKET_PATH: &str = "/tmp/por.sock";
-pub const SOCKET_NAME: &str = "por.sock";
 
 fn handle_client(
     stream: &interprocess::local_socket::Stream,
@@ -68,7 +67,7 @@ pub fn create_local_server<'a>(
     nonces: Vec<u64>,
     ledger: Ledger,
 ) -> Result<()> {
-    let socket_name: Name<'_> = SOCKET_NAME.to_ns_name::<GenericNamespaced>()?;
+    let socket_name: Name<'_> = SOCKET_PATH.to_fs_name::<GenericFilePath>()?;
 
     // This is important because bind will fail if the file already exists.
     if Path::new(SOCKET_PATH).exists() {
@@ -141,7 +140,7 @@ pub fn create_local_server<'a>(
 
 pub fn send_hash_to_server(hash: &str) -> Result<()> {
     // 1. Create a connection to the server.
-    let socket_name: Name<'_> = SOCKET_NAME.to_ns_name::<GenericNamespaced>()?;
+    let socket_name: Name<'_> = SOCKET_PATH.to_fs_name::<GenericFilePath>()?;
     let mut stream = interprocess::local_socket::Stream::connect(socket_name)
         .with_context(|| {
             // the server stopped running, remove the socket file
