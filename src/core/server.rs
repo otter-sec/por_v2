@@ -147,7 +147,7 @@ pub fn send_hash_to_server(hash: &str) -> Result<()> {
             let _ = std::fs::remove_file(SOCKET_PATH)
                 .with_context(|| format!("Failed to remove socket file: {}", SOCKET_PATH));
             format!("Failed to connect to socket: {}, so it was deleted.
-            The prover server probably stopped running. If you want to prove without the server, run the same command again", SOCKET_PATH)
+The prover server probably stopped running. If you want to prove without the server, run the same command again", SOCKET_PATH)
         })?;
 
     // 2. Send the hash as a line of text.
