@@ -14,7 +14,6 @@ use clap::{Args, Parser, Subcommand};
 use config::*;
 use daemonize::Daemonize;
 use core::prover::*;
-use core::server::*;
 use core::verifier::{verify_root, verify_user_inclusion};
 use std::fs::File;
 use merkle_tree::*;
@@ -27,6 +26,9 @@ use regex::Regex;
 use std::time::Instant;
 use types::*;
 use utils::logger::*;
+
+#[cfg(target_family = "unix")]
+use core::server::*;
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -165,8 +167,8 @@ fn main() -> Result<()> {
             // create the inclusion_proofs directory
             let _ = std::fs::create_dir_all("inclusion_proofs");
 
-            // if userhash and socket exists, just send the hash to the server
-            if (args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
+            // if userhash and socket exists, just send the hash to the server (works only on unix)
+            if (cfg!(target_family = "unix") && args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
                 log_info!("Prover server is running, sending hash to the server...");
                 send_hash_to_server(args.userhash.as_ref().unwrap())?;
 
@@ -194,7 +196,7 @@ fn main() -> Result<()> {
             log_success!("Reading and deserializing completed!");
 
             // create the server if daemon is true
-            if args.daemon {
+            if args.daemon && cfg!(target_family = "unix") {
                 let stdout = File::create("/tmp/por_daemon.out").unwrap();
                 let stderr = File::create("/tmp/por_daemon.err").unwrap();
 
