@@ -10,6 +10,7 @@ bigdecimal = "0.4.8"
 chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
 env_logger = "0.11.8"
+zstd = "0.13"
 plonky2 = "1.0.2"
 rand = "0.9.1"
 rayon = "1.10.0"

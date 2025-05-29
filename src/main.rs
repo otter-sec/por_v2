@@ -12,7 +12,6 @@ use clap::{Args, Parser, Subcommand};
 use config::*;
 use core::prover::*;
 use core::verifier::{verify_root, verify_user_inclusion};
-use std::fs::File;
 use merkle_tree::*;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::hash_types::HashOut;
@@ -20,6 +19,7 @@ use plonky2::plonk::circuit_data::VerifierCircuitData;
 use plonky2::plonk::config::{GenericHashOut, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use regex::Regex;
+use std::fs::File;
 use std::time::Instant;
 use types::*;
 use utils::logger::*;
@@ -29,8 +29,10 @@ use core::server::*;
 #[cfg(target_family = "unix")]
 use daemonize::Daemonize;
 #[cfg(target_family = "unix")]
-use signal_hook::{consts::{SIGINT, SIGHUP}, iterator::Signals};
-
+use signal_hook::{
+    consts::{SIGHUP, SIGINT},
+    iterator::Signals,
+};
 
 #[cfg(target_family = "unix")]
 #[global_allocator]
@@ -127,6 +129,10 @@ struct ProveInclusionArgs {
     /// Prove inclusion for all users
     #[clap(long, group = "inclusion_target")]
     all: bool,
+
+    /// Prove inclusion for all users in batches (grouped by first 3 characters)
+    #[clap(long, group = "inclusion_target")]
+    all_batched: bool,
 }
 
 fn assert_config(final_proof: &FinalProof) {
@@ -224,7 +230,7 @@ fn main() -> Result<()> {
                                     log_info!("Daemon process killed, removing socket file...");
                                     let _ = std::fs::remove_file(SOCKET_PATH);
                                     let _ = std::fs::remove_file("/tmp/por.pid");
-                                    
+
                                     // Exit the process
                                     std::process::exit(0);
                                 }
@@ -232,8 +238,10 @@ fn main() -> Result<()> {
                         });
 
                         create_local_server(merkle_tree, nonces, ledger)?
-                    },
-                    Err(e) => log_error!("Error while starting daemon process. Check if there are other process already being executed."),
+                    }
+                    Err(e) => log_error!(
+                        "Error while starting daemon process. Check if there are other process already being executed."
+                    ),
                 }
 
                 return Ok(());
@@ -243,6 +251,10 @@ fn main() -> Result<()> {
                 log_info!("Proving inclusion for all users...");
                 prove_inclusion_all(&ledger, &merkle_tree, nonces)?;
                 log_success!("Successfully generated inclusion proofs for all users!");
+            } else if args.all_batched {
+                log_info!("Proving inclusion for all users in batches...");
+                prove_inclusion_all_batched(&ledger, &merkle_tree, nonces)?;
+                log_success!("Successfully generated batched inclusion proofs for all users!");
             } else if let Some(userhash) = &args.userhash {
                 log_info!("Proving inclusion for user hash: {}", userhash);
                 let inclusion_proof =

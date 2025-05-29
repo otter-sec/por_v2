@@ -1,9 +1,11 @@
+use rayon::prelude::*;
+use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
-use rayon::prelude::*;
 
-use crate::utils::logger::*;
 use crate::types::*;
+use crate::utils::logger::*;
 use crate::{
     circuits::batch_circuit::BatchCircuit,
     circuits::circuit_registry::CircuitRegistry,
@@ -13,6 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use plonky2::util::serialization::DefaultGateSerializer;
+use zstd;
 
 fn prove_recursively(
     inner_circuit_digest: Option<HashOut<F>>,
@@ -53,7 +56,11 @@ fn prove_recursively(
     if cfg!(debug_assertions) {
         let elapsed = build_circuit_time.elapsed();
         progress.clear_bar();
-        log_warning!("Recursive circuit at depth {} build time: {:?}", merkle_depth.unwrap(), elapsed);
+        log_warning!(
+            "Recursive circuit at depth {} build time: {:?}",
+            merkle_depth.unwrap(),
+            elapsed
+        );
         progress.print_progress_bar();
     }
 
@@ -95,7 +102,6 @@ fn prove_recursively(
         let proof = recursive_circuit.prove_recursive_circuit(chunk.to_vec());
         recursive_proofs.push(proof);
 
-
         if cfg!(debug_assertions) {
             // BENCHMARK DEBUG
             let elapsed = timer.elapsed();
@@ -103,7 +109,6 @@ fn prove_recursively(
             log_warning!("Recursive proof time: {:?}", elapsed);
             progress.print_progress_bar();
         }
-        
 
         // update progress
         progress.update_recursive_progress();
@@ -189,13 +194,13 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
         for i in 0..chunk.len() {
             let userhash = ledger.hashes[count * BATCH_SIZE as usize + i].clone();
             let balances = chunk[i].clone();
-            
+
             // generate a random nonce as security against brute force attacks to discover user balances
             // MAKE SURE THIS ITERATION IS NOT PARALLELIZED, OTHERWISE THE NONCES VECTOR
             // WILL NOT BE ORDERED CORRECTLY
             let nonce = rand::random::<u64>();
             account_nonces.push(nonce);
-            
+
             let hash = hash_account(&balances, userhash, nonce);
             leaf_hashes.push(hash);
         }
@@ -224,7 +229,6 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     log_success!("Proved all batch circuits successfully!");
     progress.print_progress_bar();
 
-
     // create the merkle tree leaf nodes
     let mut leaf_nodes = Vec::new();
     for leaf_hashes in merkle_leafs {
@@ -238,7 +242,11 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     let mut merkle_tree = MerkleTree::new_from_leafs(leaf_nodes, 1, true);
 
     // create the circuit registry
-    let batch_circuit_digest = batch_circuit.circuit_data.verifier_only.circuit_digest.clone();
+    let batch_circuit_digest = batch_circuit
+        .circuit_data
+        .verifier_only
+        .circuit_digest
+        .clone();
     let mut circuit_registry = CircuitRegistry::new(batch_circuit, &ledger.asset_prices);
 
     // populate the batch nodes
@@ -251,13 +259,14 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
             // check if it is a padding node
             if count >= batch_proofs_length {
                 // get empty proof if so
-                circuit_registry.get_empty_proof(batch_circuit_digest).unwrap()
+                circuit_registry
+                    .get_empty_proof(batch_circuit_digest)
+                    .unwrap()
             } else {
                 // otherwise get the proof from the batch proofs
                 &batch_proofs[count]
             }
         };
-        
 
         // get the hashes elements from the proof
         let hash_offset = BatchCircuit::get_root_hash_offset(asset_count);
@@ -363,7 +372,7 @@ pub fn prove_user_inclusion(
         user_balances: user_balances.clone(),
         merkle_proof: merkle_proof,
         root_hash: merkle_tree.root.hash().clone().unwrap(),
-        nonce: nonce
+        nonce: nonce,
     };
 
     Ok(inclusion_proof)
@@ -388,12 +397,131 @@ pub fn prove_user_inclusion_by_hash(
 }
 
 // Create inclusion proofs for all users using parallel processing
+// Process hashes in batches by their first 3 characters to reduce memory usage
+pub fn prove_inclusion_all_batched(
+    ledger: &Ledger,
+    merkle_tree: &MerkleTree,
+    nonces: Vec<u64>,
+) -> Result<()> {
+    let total_hashes = ledger.hashes.len();
+
+    // Group hashes by their first 3 characters
+    let mut hash_groups: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+
+    for (index, userhash) in ledger.hashes.iter().enumerate() {
+        let bundle_key = if userhash.len() >= 3 {
+            userhash[0..3].to_string()
+        } else {
+            userhash.clone() // fallback for hashes shorter than 3 characters
+        };
+
+        hash_groups
+            .entry(bundle_key)
+            .or_insert_with(Vec::new)
+            .push((index, userhash.clone()));
+    }
+
+    let total_groups = hash_groups.len();
+    let mut processed_groups = 0;
+    let mut processed_hashes = 0;
+
+    log_info!(
+        "Processing {} hash groups with {} total hashes...",
+        total_groups,
+        total_hashes
+    );
+
+    // Process each group sequentially to control memory usage
+    for (bundle_key, hash_indices) in hash_groups {
+        log_info!(
+            "Processing group '{}' with {} hashes...",
+            bundle_key,
+            hash_indices.len()
+        );
+
+        // Wrap the progress state for this batch
+        let progress = Arc::new(Mutex::new(ProveInclusionProgress::new(total_hashes)));
+
+        // Set initial progress to reflect already processed hashes
+        {
+            let mut prog = progress.lock().unwrap();
+            prog.update_progress(processed_hashes);
+        }
+
+        // Process this group's hashes in parallel and collect as HashMap<hash, proof>
+        let batch_result: Result<HashMap<String, InclusionProof>> = hash_indices
+            .par_iter()
+            .map(|(index, userhash)| {
+                let inclusion_proof = prove_user_inclusion(
+                    *index,
+                    userhash.clone(),
+                    nonces[*index],
+                    merkle_tree,
+                    ledger,
+                )?;
+
+                // Update the progress bar
+                {
+                    let mut prog = progress.lock().unwrap();
+                    prog.update_progress(1);
+                }
+
+                Ok((userhash.clone(), inclusion_proof))
+            })
+            .collect(); // Collect results into a HashMap<String, InclusionProof>
+
+        // Handle the batch result
+        match batch_result {
+            Ok(inclusion_proofs_map) => {
+                // Write the batch to file immediately as a compressed object with hash: proof format
+                let bundle_filename =
+                    format!("inclusion_proofs/inclusion_proofs_{}.json.zst", bundle_key);
+                let bundle_json = serde_json::to_string(&inclusion_proofs_map)?;
+
+                // Compress the JSON data using zstd (much faster than gzip)
+                let compressed_data = zstd::encode_all(bundle_json.as_bytes(), 1)?; // Level 1 = fastest
+                std::fs::write(&bundle_filename, compressed_data)?;
+
+                processed_hashes += hash_indices.len();
+                processed_groups += 1;
+
+                {
+                    let prog = progress.lock().unwrap();
+                    prog.clear_bar();
+                }
+
+                log_success!(
+                    "Completed group '{}' ({}/{} groups) - compressed to {}",
+                    bundle_key,
+                    processed_groups,
+                    total_groups,
+                    bundle_filename
+                );
+            }
+            Err(e) => {
+                {
+                    let prog = progress.lock().unwrap();
+                    prog.clear_bar();
+                }
+                return Err(e);
+            }
+        }
+    }
+
+    log_success!(
+        "Successfully processed all {} groups with {} total inclusion proofs!",
+        total_groups,
+        total_hashes
+    );
+    Ok(())
+}
+
+// Create inclusion proofs for all users using parallel processing
 pub fn prove_inclusion_all(
     ledger: &Ledger,
     merkle_tree: &MerkleTree,
     nonces: Vec<u64>,
-) -> Result<()>
-{
+) -> Result<()> {
     let total_hashes = ledger.hashes.len();
 
     // Wrap the mutable progress state in Arc<Mutex> to allow safe shared access
@@ -409,17 +537,14 @@ pub fn prove_inclusion_all(
     // Use rayon's parallel iterator `par_iter()`
     // `try_for_each` is used because the closure returns a Result.
     // If any iteration returns an Err, try_for_each stops and returns that Err.
-    let processing_result: Result<()> = ledger.hashes
+    let processing_result: Result<()> = ledger
+        .hashes
         .par_iter() // Convert the iterator into a parallel iterator
         .enumerate()
-        .try_for_each(|(index, userhash)| { // The closure executed for each item in parallel
-            let inclusion_proof = prove_user_inclusion(
-                index,
-                userhash.clone(),
-                nonces[index],
-                merkle_tree,
-                ledger,
-            )?;
+        .try_for_each(|(index, userhash)| {
+            // The closure executed for each item in parallel
+            let inclusion_proof =
+                prove_user_inclusion(index, userhash.clone(), nonces[index], merkle_tree, ledger)?;
 
             let inclusion_filename = format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
             let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?; // Propagate serialization errors
@@ -429,7 +554,7 @@ pub fn prove_inclusion_all(
             {
                 let mut prog = progress.lock().unwrap(); // Acquire the lock
                 prog.update_progress(1);
-            } 
+            }
 
             Ok(())
         }); // try_for_each returns the first error encountered, or Ok(()) if all succeed
@@ -438,7 +563,7 @@ pub fn prove_inclusion_all(
     {
         let prog = progress.lock().unwrap(); // Acquire the lock
         prog.clear_bar();
-    } 
-    
+    }
+
     processing_result
 }
