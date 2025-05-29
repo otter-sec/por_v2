@@ -188,14 +188,10 @@ impl MerkleTree {
             return false
         }
 
-        println!("Num of children: {}", root_node.children.as_ref().unwrap().len());
-
         // verify if the hash is the same as the hash of the children (Poseidon)
         let children_hashes = root_node.children.as_ref().unwrap().iter()
             .filter_map(|child| child.hash.clone())
             .collect::<Vec<_>>();
-
-        println!("Num of children hashes: {}", children_hashes.len());
 
         let hash = hash_n_subhashes::<F, D>(&children_hashes).to_bytes();
         if root_node.hash.as_ref().unwrap() != &hash {
