@@ -23,7 +23,6 @@ use std::time::Instant;
 use types::*;
 use utils::logger::*;
 
-
 #[cfg(target_family = "unix")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
@@ -119,6 +118,10 @@ struct ProveInclusionArgs {
     /// Prove inclusion for all users
     #[clap(long, group = "inclusion_target")]
     all: bool,
+
+    /// Prove inclusion for all users in batches (grouped by first 3 characters)
+    #[clap(long, group = "inclusion_target")]
+    all_batched: bool,
 }
 
 fn assert_config(final_proof: &FinalProof) {
@@ -162,8 +165,6 @@ fn main() -> Result<()> {
             let _ = std::fs::create_dir_all("inclusion_proofs");
 
             // check if flag daemon is set
-            
-
 
             // if not daemonize
             log_info!(
@@ -171,7 +172,7 @@ fn main() -> Result<()> {
             );
             let merkle_tree_file = std::fs::read_to_string("merkle_tree.json")?;
             let merkle_tree: MerkleTree = serde_json::from_str(&merkle_tree_file)?;
-            
+
             let final_proof_file = std::fs::read_to_string("final_proof.json")?;
             let final_proof: FinalProof = serde_json::from_str(&final_proof_file)?;
 
@@ -189,6 +190,10 @@ fn main() -> Result<()> {
                 log_info!("Proving inclusion for all users...");
                 prove_inclusion_all(&ledger, &merkle_tree, nonces)?;
                 log_success!("Successfully generated inclusion proofs for all users!");
+            } else if args.all_batched {
+                log_info!("Proving inclusion for all users in batches...");
+                prove_inclusion_all_batched(&ledger, &merkle_tree, nonces)?;
+                log_success!("Successfully generated batched inclusion proofs for all users!");
             } else if let Some(userhash) = &args.userhash {
                 log_info!("Proving inclusion for user hash: {}", userhash);
                 let inclusion_proof =
