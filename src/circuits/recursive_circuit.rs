@@ -80,7 +80,14 @@ impl RecursiveCircuit {
             final_balances.push(builder.zero());
             for inner_data in &inner_targets {
                 // sum all balances of the inner circuits
-                final_balances[i] = builder.add(inner_data.asset_balances[i], final_balances[i]);
+                let new_summed_bal = builder.add(inner_data.asset_balances[i], final_balances[i]);
+
+                // CONSTRAINT: overflow check - for each iteration we check if the new summed balance is less than the previous one
+                let diff = builder.sub(new_summed_bal, final_balances[i]);
+                // if the diff is less than zero, then we have an overflow
+                builder.range_check(diff, 62);
+
+                final_balances[i] = new_summed_bal;
             }
         }
 

@@ -81,7 +81,6 @@ impl BatchCircuit {
             builder.connect(sum, total_asset_values[i]);
         }
 
-
         // leaf hashes to calculate root hash
         let leaf_hashes = builder.add_virtual_hashes(BATCH_SIZE as usize);
 
