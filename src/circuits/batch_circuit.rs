@@ -10,6 +10,7 @@ use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
+use crate::utils::circuit_helper::*;
 use crate::config::*;
 
 // builder configs
@@ -67,7 +68,9 @@ impl BatchCircuit {
                     builder.mul_add(*balance, *value, acc)
                 });
 
-            builder.range_check(account.equity, 62);
+            // builder.range_check(account.equity, 62);
+            let is_negative = is_negative(&mut builder, account.equity);
+            builder.assert_bool(is_negative);
         }
 
         // calculate the sum of all assets of all accounts
@@ -79,12 +82,16 @@ impl BatchCircuit {
                 let new_sum = builder.add(account.asset_balances[i], sum);
 
                 // CONSTRAINT: check if not overflowing
-                // since asset balances can be negative, we need to ensure the difference
-                // of new_sum and sum is equal to the account.asset_balances[i]. If it is not,
-                // it means that the sum has overflowed.
-                let diff = builder.sub(new_sum, sum);
-                let not_overflowed = builder.is_equal(diff, account.asset_balances[i]);
-                builder.assert_bool(not_overflowed);
+                // the only way to overflow is if two positive numbers are added together and the result is negative
+                // since we allow overflows with negative numbers (negative numbers intentionally uses overflows)
+                let is_sum1_positive = is_positive(&mut builder, account.asset_balances[i]);
+                let is_sum2_positive = is_positive(&mut builder, sum);
+                let is_both_positive = builder.and(is_sum1_positive, is_sum2_positive);
+                let is_result_negative = is_negative(&mut builder, new_sum);
+
+                let is_overflow = builder.and(is_both_positive, is_result_negative);
+                let is_not_overflow = builder.not(is_overflow);
+                builder.assert_bool(is_not_overflow);
 
                 // update sum
                 sum = new_sum;

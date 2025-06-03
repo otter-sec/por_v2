@@ -4,7 +4,7 @@ use plonky2::{fri::{reduction_strategies::FriReductionStrategy, FriConfig}, plon
 pub const BATCH_SIZE: usize = 1024;
 pub const RECURSIVE_SIZE: usize = 8;
 
-// these should not be changed without refactoring large parts of the code
+// these should not be changed without refactoring large part of the code
 pub const D: usize = 2;
 pub type C = PoseidonGoldilocksConfig; 
 pub type F = <C as GenericConfig<D>>::F;

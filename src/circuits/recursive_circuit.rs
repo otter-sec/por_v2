@@ -10,6 +10,7 @@ use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
+use crate::utils::circuit_helper::*;
 
 // builder configs
 const D: usize = 2;
@@ -82,10 +83,17 @@ impl RecursiveCircuit {
                 // sum all balances of the inner circuits
                 let new_summed_bal = builder.add(inner_data.asset_balances[i], final_balances[i]);
 
-                // CONSTRAINT: overflow check - for each iteration we check if the new summed balance is less than the previous one
-                let diff = builder.sub(new_summed_bal, final_balances[i]);
-                // if the diff is less than zero, then we have an overflow
-                builder.range_check(diff, 62);
+                // CONSTRAINT: check if not overflowing
+                // the only way to overflow is if two positive numbers are added together and the result is negative
+                // since we allow overflows with negative numbers (negative numbers intentionally uses overflows)
+                let is_sum1_positive = is_positive(&mut builder, inner_data.asset_balances[i]);
+                let is_sum2_positive = is_positive(&mut builder, final_balances[i]);
+                let is_both_positive = builder.and(is_sum1_positive, is_sum2_positive);
+                let is_result_negative = is_negative(&mut builder, new_summed_bal);
+                
+                let is_overflow = builder.and(is_both_positive, is_result_negative);
+                let is_not_overflow = builder.not(is_overflow);
+                builder.assert_bool(is_not_overflow);
 
                 final_balances[i] = new_summed_bal;
             }
