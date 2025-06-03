@@ -76,7 +76,18 @@ impl BatchCircuit {
         for i in 0..asset_count {
             let mut sum = builder.zero();
             for account in &accounts {
-                sum = builder.add(account.asset_balances[i], sum);
+                let new_sum = builder.add(account.asset_balances[i], sum);
+
+                // CONSTRAINT: check if not overflowing
+                // since asset balances can be negative, we need to ensure the difference
+                // of new_sum and sum is equal to the account.asset_balances[i]. If it is not,
+                // it means that the sum has overflowed.
+                let diff = builder.sub(new_sum, sum);
+                let not_overflowed = builder.is_equal(diff, account.asset_balances[i]);
+                builder.assert_bool(not_overflowed);
+
+                // update sum
+                sum = new_sum;
             }
             builder.connect(sum, total_asset_values[i]);
         }
