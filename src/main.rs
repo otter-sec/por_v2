@@ -57,7 +57,7 @@ fn get_ledger_values_from_file(filename: &str) -> Ledger {
 
         decimals.push(LedgerDecimals {
             usdt_decimals: asset_decimals,
-            balance_decimals: balance_decimals,
+            balance_decimals,
         });
     }
 
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
 
             // if userhash and socket exists, just send the hash to the server (only on unix)
             #[cfg(target_family = "unix")]
-            if (args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
+            if args.userhash.is_some() && std::fs::exists(SOCKET_PATH)? {
                 log_info!("Prover server is running, sending hash to the server...");
                 send_hash_to_server(args.userhash.as_ref().unwrap())?;
 
@@ -260,7 +260,7 @@ fn main() -> Result<()> {
                     prove_user_inclusion_by_hash(userhash.clone(), &merkle_tree, &nonces, &ledger)?;
 
                 let inclusion_filename =
-                    format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
+                    format!("inclusion_proofs/inclusion_proof_{userhash}.json");
                 let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?;
                 std::fs::write(inclusion_filename, inclusion_proof_json)?;
             } else {
@@ -307,15 +307,14 @@ fn main() -> Result<()> {
                         // Read and deserialize the inclusion proof file
                         let inclusion_proof_file: String =
                             std::fs::read_to_string(entry.path()).context(format_error(
-                                &format!("Failed to read inclusion proof file: {}", filename),
+                                &format!("Failed to read inclusion proof file: {filename}"),
                             ))?;
 
                         let inclusion_proof: InclusionProof = serde_json::from_str(
                             &inclusion_proof_file,
                         )
                         .context(format_error(&format!(
-                            "Failed to deserialize inclusion proof file: {}",
-                            filename
+                            "Failed to deserialize inclusion proof file: {filename}"
                         )))?;
 
                         // Verify the inclusion proof

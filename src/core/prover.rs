@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -118,8 +117,7 @@ fn prove_recursively(
     let inner_circuit_digest = recursive_circuit
         .circuit_data
         .verifier_only
-        .circuit_digest
-        .clone();
+        .circuit_digest;
     circuit_registry.add_recursive_circuit(recursive_circuit, merkle_depth.unwrap());
 
     // get the nodes from the merkle tree at the current depth
@@ -146,7 +144,7 @@ fn prove_recursively(
 
     if recursive_proofs.len() > 1 {
         // prove the recursive circuit with the recursive proofs
-        return prove_recursively(
+        prove_recursively(
             Some(inner_circuit_digest),
             asset_count,
             recursive_proofs,
@@ -154,9 +152,9 @@ fn prove_recursively(
             Some(merkle_depth.unwrap() - 1),
             circuit_registry,
             progress,
-        );
+        )
     } else {
-        return (recursive_proofs[0].clone(), merkle_tree);
+        (recursive_proofs[0].clone(), merkle_tree)
     }
 }
 
@@ -185,14 +183,14 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
 
     // split the account into chunks of BATCH_SIZE and prove all chunks
     let mut count = 0;
-    for chunk in ledger.account_balances.chunks(BATCH_SIZE as usize) {
+    for chunk in ledger.account_balances.chunks(BATCH_SIZE) {
         let circuit_ref = &batch_circuit;
         let batch_time = Instant::now();
 
         // calculate each account hash (leafs)
         let mut leaf_hashes = Vec::new();
         for i in 0..chunk.len() {
-            let userhash = ledger.hashes[count * BATCH_SIZE as usize + i].clone();
+            let userhash = ledger.hashes[count * BATCH_SIZE + i].clone();
             let balances = chunk[i].clone();
 
             // generate a random nonce as security against brute force attacks to discover user balances
@@ -245,8 +243,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     let batch_circuit_digest = batch_circuit
         .circuit_data
         .verifier_only
-        .circuit_digest
-        .clone();
+        .circuit_digest;
     let mut circuit_registry = CircuitRegistry::new(batch_circuit, &ledger.asset_prices);
 
     // populate the batch nodes
@@ -363,16 +360,16 @@ pub fn prove_user_inclusion(
 ) -> Result<InclusionProof> {
     let user_balances = ledger.account_balances[user_index].clone();
 
-    let user_node_path = merkle_tree.get_nth_leaf_path(user_index.clone()).unwrap();
+    let user_node_path = merkle_tree.get_nth_leaf_path(user_index).unwrap();
 
     let merkle_proof = merkle_tree.prove_inclusion(user_node_path);
 
     let inclusion_proof = InclusionProof {
-        user_hash: user_hash,
+        user_hash,
         user_balances: user_balances.clone(),
-        merkle_proof: merkle_proof,
+        merkle_proof,
         root_hash: merkle_tree.root.hash().clone().unwrap(),
-        nonce: nonce,
+        nonce,
     };
 
     Ok(inclusion_proof)
@@ -417,7 +414,7 @@ pub fn prove_inclusion_all_batched(
 
         hash_groups
             .entry(bundle_key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push((index, userhash.clone()));
     }
 
@@ -475,7 +472,7 @@ pub fn prove_inclusion_all_batched(
             Ok(inclusion_proofs_map) => {
                 // Write the batch to file immediately as a compressed object with hash: proof format
                 let bundle_filename =
-                    format!("inclusion_proofs/inclusion_proofs_{}.json.zst", bundle_key);
+                    format!("inclusion_proofs/inclusion_proofs_{bundle_key}.json.zst");
                 let bundle_json = serde_json::to_string(&inclusion_proofs_map)?;
 
                 // Compress the JSON data using zstd (much faster than gzip)
@@ -546,7 +543,7 @@ pub fn prove_inclusion_all(
             let inclusion_proof =
                 prove_user_inclusion(index, userhash.clone(), nonces[index], merkle_tree, ledger)?;
 
-            let inclusion_filename = format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
+            let inclusion_filename = format!("inclusion_proofs/inclusion_proof_{userhash}.json");
             let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?; // Propagate serialization errors
             std::fs::write(inclusion_filename, inclusion_proof_json)?; // Propagate file writing errors
 

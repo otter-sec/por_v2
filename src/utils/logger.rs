@@ -26,7 +26,7 @@ impl ProveProgress{
         while remaining > 1{
             total_recursive_circuits += 1;
             total_recursive_proofs += remaining / RECURSIVE_SIZE;
-            remaining = remaining / RECURSIVE_SIZE;
+            remaining /= RECURSIVE_SIZE;
         }
 
         ProveProgress{
@@ -64,7 +64,7 @@ impl ProveProgress{
     
         // Use carriage return \r to move the cursor to the beginning of the line
         // and print the updated bar.
-        print!("\r{}", bar);
+        print!("\r{bar}");
     
         // Flush the standard output buffer to ensure the output is displayed immediately.
         std::io::stdout().flush().unwrap();
@@ -72,7 +72,7 @@ impl ProveProgress{
 
     pub fn clear_bar(&self){
         let clear_line = " ".repeat(self.bar_width + 10); // Add some buffer just in case
-        print!("\r{}\r", clear_line);
+        print!("\r{clear_line}\r");
     }
 
     fn update_total_progress(&mut self){
@@ -140,7 +140,7 @@ impl ProveInclusionProgress{
     
         // Use carriage return \r to move the cursor to the beginning of the line
         // and print the updated bar.
-        print!("\r{}", bar);
+        print!("\r{bar}");
     
         // Flush the standard output buffer to ensure the output is displayed immediately.
         std::io::stdout().flush().unwrap();
@@ -148,7 +148,7 @@ impl ProveInclusionProgress{
 
     pub fn clear_bar(&self){
         let clear_line = " ".repeat(self.bar_width + 10); // Add some buffer just in case
-        print!("\r{}\r", clear_line);
+        print!("\r{clear_line}\r");
     }
 
     pub fn update_progress(&mut self, users: usize){
@@ -188,7 +188,7 @@ macro_rules! log_warning {
 
 // to be used with .expect() or similar
 pub fn format_error(message: &str) -> String {
-    format!("\x1b[31m[-] {}\x1b[0m", message)
+    format!("\x1b[31m[-] {message}\x1b[0m")
 }
 
 pub fn print_header(){

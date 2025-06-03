@@ -52,7 +52,7 @@ impl RecursiveCircuit {
             let batch_balance = proof_target.public_inputs[balances_offset].to_vec();
 
             let inner_data = InnerCircuitTargets {
-                proof_target: proof_target,
+                proof_target,
                 verifier_target: verify_target,
                 asset_balances: batch_balance,
             };

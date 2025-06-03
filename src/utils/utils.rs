@@ -30,8 +30,8 @@ pub fn pad_accounts(
     let hash_nibbles = hashes[0].len();
 
     // only pad if the number of accounts is not a multiple of batch_size
-    if accounts.len() % batch_size as usize != 0 {
-        let padding = batch_size as usize - (accounts.len() % batch_size as usize);
+    if accounts.len() % batch_size != 0 {
+        let padding = batch_size - (accounts.len() % batch_size);
         for _ in 0..padding {
             padded_accounts.push(vec![0; asset_count]); // pad with zero balances
             padded_hashes.push("0".repeat(hash_nibbles)); // pad with zero hash
@@ -69,11 +69,10 @@ pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
 
     let inputs: Vec<F> = hashout_inputs
         .iter()
-        .map(|h| h.elements.to_vec())
-        .flatten()
+        .flat_map(|h| h.elements.to_vec())
         .collect();
-    let hash = PoseidonHash::hash_no_pad(inputs.as_slice());
-    hash
+    
+    PoseidonHash::hash_no_pad(inputs.as_slice())
 }
 
 // hash account balances and userhash

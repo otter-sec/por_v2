@@ -101,18 +101,18 @@ impl MerkleTree {
 
         // if there is only one node (and it is not the batch circuit), set it as the root
         if nodes.len() == 1 && !batch {
-            return Self {
+            Self {
                 root: nodes[0].clone(),
                 depth: depth + 1, // minimum depth is 2 --> 1 for the leafs and 1 for the root
-            };
+            }
         } else {
             // otherwise, include the padding chunks and continue recursively generating the tree
             nodes.extend(padded_nodes);
-            return Self::new_from_leafs(nodes, depth + 1, false);
+            Self::new_from_leafs(nodes, depth + 1, false)
         }
     }
 
-    pub fn get_nodes_from_depth<'a>(&'a mut self, depth: usize) -> Vec<&'a mut Node> {
+    pub fn get_nodes_from_depth(&mut self, depth: usize) -> Vec<&mut Node> {
         let mut result = Vec::new();
 
         self.root.collect_nodes_at_depth_mut(depth, &mut result, 1);

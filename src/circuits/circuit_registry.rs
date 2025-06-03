@@ -41,7 +41,7 @@ impl CircuitRegistry {
     }
 
     pub fn get_recursive_circuit(&self, digest: HashOut<F>) -> Option<&RecursiveCircuitEntry> {
-        self.recursive_circuits.get(&digest).map(|entry| entry)
+        self.recursive_circuits.get(&digest)
     }
 
     pub fn get_empty_proof(&mut self, digest: HashOut<F>) -> Option<&ProofWithPublicInputs<F, C, D>> {
@@ -81,11 +81,6 @@ impl CircuitRegistry {
     }
 
     pub fn get_recursive_circuit_by_depth(&self, depth: usize) -> Option<&RecursiveCircuitEntry> {
-        for entry in self.recursive_circuits.values() {
-            if entry.depth == depth {
-                return Some(entry);
-            }
-        }
-        None
+        self.recursive_circuits.values().find(|&entry| entry.depth == depth)
     }
 }

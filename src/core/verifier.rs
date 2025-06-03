@@ -58,7 +58,7 @@ fn print_global_information(final_proof: &FinalProof) {
             final_proof.asset_prices[i].try_into().unwrap(),
             final_proof.asset_decimals[i].usdt_decimals,
         );
-        println!("{}: US$ {}", asset_name, asset_price);
+        println!("{asset_name}: US$ {asset_price}");
     }
 
     println!("======================");
@@ -86,7 +86,7 @@ fn print_reserves(final_proof: &FinalProof){
             asset_reserves[i].to_canonical_u64().try_into().unwrap(),
             final_proof.asset_decimals[i].balance_decimals,
         );
-        println!("{}: {}", asset_name, asset_price);
+        println!("{asset_name}: {asset_price}");
     }
 
     println!("======================\n");
@@ -125,7 +125,7 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
     built_root_circuit
         .circuit_data
         .verify(final_proof.proof.clone())
-        .expect(format_error("Failed to verify proof").as_str());
+        .unwrap_or_else(|_| { panic!("{}", format_error("Failed to verify proof")) });
     log_success!("Proof is valid!");
 
     // 3. verify the asset prices with the asset prices in the proof
@@ -139,7 +139,7 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
             proof_asset_price.to_canonical_u64() == final_proof.asset_prices[i],
             "{}",
             format_error(
-                format!("Asset price for {} does not match the ZK proof", asset_name).as_str()
+                format!("Asset price for {asset_name} does not match the ZK proof").as_str()
             ),
         );
     }
@@ -160,7 +160,7 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
             usdt_decimals + balance_decimals == summed_decimals,
             "{}",
             format_error(
-                format!("Asset {} decimals are not valid", asset_name).as_str()
+                format!("Asset {asset_name} decimals are not valid").as_str()
             ),
         );
     }
@@ -215,7 +215,7 @@ fn print_account_information(final_proof: &FinalProof, inclusion_proof: &Inclusi
             inclusion_proof.user_balances[i].try_into().unwrap(),
             final_proof.asset_decimals[i].balance_decimals,
         );
-        println!("{}: {}", asset_name, asset_balance);
+        println!("{asset_name}: {asset_balance}");
     }
 
     println!("======================");
@@ -239,7 +239,7 @@ pub fn verify_user_inclusion(final_proof: FinalProof, inclusion_proof: Inclusion
 
     root_verifier_data
         .verify(final_proof.proof.clone())
-        .expect(format_error("Failed to verify proof").as_str());
+        .unwrap_or_else(|_| { panic!("{}", format_error("Failed to verify proof")) });
     log_success!("Global proof is valid!");
 
     // 2. verify if the user is included in the merkle tree

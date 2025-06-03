@@ -89,7 +89,7 @@ impl BatchCircuit {
         }
 
         // leaf hashes to calculate root hash
-        let leaf_hashes = builder.add_virtual_hashes(BATCH_SIZE as usize);
+        let leaf_hashes = builder.add_virtual_hashes(BATCH_SIZE);
 
         // calculate root hash by concatenating all leaf hashes
         let concat_hashes = leaf_hashes.iter().fold(Vec::new(), |mut acc, hash| {
@@ -111,7 +111,7 @@ impl BatchCircuit {
 
         BatchCircuit {
             asset_prices_target,
-            leaf_hashes: leaf_hashes,
+            leaf_hashes,
             account_targets: accounts,
             circuit_data: circuit,
         }
@@ -127,7 +127,7 @@ impl BatchCircuit {
 
         // check if accounts length is equal to BATCH_SIZE
         assert!(
-            accounts.len() == BATCH_SIZE as usize,
+            accounts.len() == BATCH_SIZE,
             "The number of accounts must be equal to BATCH_SIZE"
         );
 
@@ -135,7 +135,7 @@ impl BatchCircuit {
         let asset_prices: Vec<F> = asset_prices
             .iter()
             .map(|&price| {
-                let price = price as u64;
+                let price = price;
                 F::from_canonical_u64(price)
             })
             .collect();
@@ -189,19 +189,19 @@ impl BatchCircuit {
         let asset_prices: Vec<F> = asset_prices
             .iter()
             .map(|&price| {
-                let price = price as u64;
+                let price = price;
                 F::from_canonical_u64(price)
             })
             .collect();
         pw.set_target_arr(&self.asset_prices_target, &asset_prices).unwrap();
 
         // set account targets
-        for (_, account) in self.account_targets.iter().enumerate() {
+        for account in self.account_targets.iter() {
             pw.set_target_arr(&account.asset_balances, vec![F::from_noncanonical_i64(0); assset_count].as_slice()).unwrap();
         }
 
         // set leaf hashes
-        for (_, leaf_hash) in self.leaf_hashes.iter().enumerate() {
+        for leaf_hash in self.leaf_hashes.iter() {
             pw.set_hash_target(*leaf_hash, HashOut::<F>::default()).unwrap();
         }
 
