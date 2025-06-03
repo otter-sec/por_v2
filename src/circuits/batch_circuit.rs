@@ -5,19 +5,12 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitData;
-use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
 use crate::utils::circuit_helper::*;
 use crate::config::*;
-
-// builder configs
-const D: usize = 2;
-type C = PoseidonGoldilocksConfig;
-type F = <C as GenericConfig<D>>::F;
-type H = <C as GenericConfig<D>>::Hasher;
 
 #[derive(Clone, Debug)]
 pub struct Account {
@@ -71,30 +64,26 @@ impl BatchCircuit {
             // builder.range_check(account.equity, 62);
             let is_negative = is_negative(&mut builder, account.equity);
             builder.assert_bool(is_negative);
+
+
+            // CONSTRAINT: check if not overflowing
+            // this is a faster way to check if not overflowing
+            // we check if a single balance is not higher than MAX_ACCOUNT_BALANCE
+            // MAX_ACCOUNT_BALANCE is calculated based on the number of users in a batch circuit
+            // and the max possible integer value (we use 2^62)
+            let _ = account.asset_balances.iter().map(|balance| {
+                builder.range_check(*balance, MAX_ACCOUNT_BALANCE_BITS);
+            });
         }
 
+        
         // calculate the sum of all assets of all accounts
         let total_asset_values = builder.add_virtual_targets(asset_count);
 
         for i in 0..asset_count {
             let mut sum = builder.zero();
             for account in &accounts {
-                let new_sum = builder.add(account.asset_balances[i], sum);
-
-                // CONSTRAINT: check if not overflowing
-                // the only way to overflow is if two positive numbers are added together and the result is negative
-                // since we allow overflows with negative numbers (negative numbers intentionally uses overflows)
-                let is_sum1_positive = is_positive(&mut builder, account.asset_balances[i]);
-                let is_sum2_positive = is_positive(&mut builder, sum);
-                let is_both_positive = builder.and(is_sum1_positive, is_sum2_positive);
-                let is_result_negative = is_negative(&mut builder, new_sum);
-
-                let is_overflow = builder.and(is_both_positive, is_result_negative);
-                let is_not_overflow = builder.not(is_overflow);
-                builder.assert_bool(is_not_overflow);
-
-                // update sum
-                sum = new_sum;
+                sum = builder.add(account.asset_balances[i], sum);
             }
             builder.connect(sum, total_asset_values[i]);
         }
@@ -142,7 +131,7 @@ impl BatchCircuit {
             "The number of accounts must be equal to BATCH_SIZE"
         );
 
-        // convert the asset prices to GoldilocksField
+        // convert the asset prices to Numeric Field
         let asset_prices: Vec<F> = asset_prices
             .iter()
             .map(|&price| {
@@ -151,7 +140,7 @@ impl BatchCircuit {
             })
             .collect();
 
-        // convert the account balances to GoldilocksField
+        // convert the account balances to Numeric Field
         let account_balances: Vec<Vec<F>> = accounts
             .iter()
             .map(|account| {

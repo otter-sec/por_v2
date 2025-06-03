@@ -5,7 +5,7 @@ use crate::config::*;
 
 #[inline]
 pub fn is_negative(builder: &mut CircuitBuilder<F, D>, x: Target) -> BoolTarget {
-    let min_neg = F::from_canonical_u64(9223372034707292161u64);
+    let min_neg = F::from_canonical_u64(9223372034707292161u64); // 2**64 - 2**32 + 1 (GoldilocksField max negative integer)
 
     let min_neg_target = builder.constant(min_neg);
     let divided = builder.div(x, min_neg_target);

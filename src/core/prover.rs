@@ -310,9 +310,9 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
 
     // serialize final proof and merkle tree using serde_json
     let root_circuit_verifier_data: VerifierCircuitData<
-        GoldilocksField,
-        PoseidonGoldilocksConfig,
-        2,
+        F,
+        C,
+        D,
     > = circuit_registry
         .get_recursive_circuit_by_depth(1)
         .unwrap()

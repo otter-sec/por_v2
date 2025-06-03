@@ -5,18 +5,11 @@ use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::VerifierOnlyCircuitData;
 use plonky2::plonk::circuit_data::{CircuitData, VerifierCircuitTarget};
-use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
 use crate::utils::circuit_helper::*;
-
-// builder configs
-const D: usize = 2;
-type C = PoseidonGoldilocksConfig;
-type F = <C as GenericConfig<D>>::F;
-type H = <C as GenericConfig<D>>::Hasher;
 
 #[derive(Debug)]
 pub struct RecursiveCircuit {

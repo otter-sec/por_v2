@@ -2,7 +2,7 @@ use crate::config::*;
 use anyhow::Result;
 use bigdecimal::BigDecimal;
 use plonky2::{
-    field::{extension::Extendable, goldilocks_field::GoldilocksField, types::Field},
+    field::{extension::Extendable, types::Field},
     hash::{
         hash_types::{HashOut, RichField},
         poseidon::PoseidonHash,
@@ -45,8 +45,8 @@ pub fn pad_accounts(
 }
 
 pub fn pad_recursive_proofs(
-    proofs: &mut Vec<ProofWithPublicInputs<GoldilocksField, C, D>>,
-    empty_proof: &ProofWithPublicInputs<GoldilocksField, C, D>,
+    proofs: &mut Vec<ProofWithPublicInputs<F, C, D>>,
+    empty_proof: &ProofWithPublicInputs<F, C, D>,
 ) {
     // only pad if the number of proofs is not a multiple of RECURSIVE_SIZE
     if proofs.len() % RECURSIVE_SIZE != 0 {
@@ -61,7 +61,7 @@ pub fn pad_recursive_proofs(
 pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
     hashes: &Vec<Vec<u8>>,
 ) -> HashOut<F> {
-    // convert the u8 vector to HashOut then to GoldilocksField
+    // convert the u8 vector to HashOut then to Field
     let hashout_inputs = hashes
         .iter()
         .map(|h| HashOut::<F>::from_bytes(h))
@@ -77,11 +77,11 @@ pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
 }
 
 // hash account balances and userhash
-pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOut<GoldilocksField> {
-    // convert everything to GoldilocksField
+pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOut<F> {
+    // convert everything to Field
     let mut hash_input = Vec::new();
     for balance in balances {
-        hash_input.push(GoldilocksField::from_noncanonical_i64(*balance));
+        hash_input.push(F::from_noncanonical_i64(*balance));
     }
 
     // convert hex hash to vec of u64
@@ -89,11 +89,11 @@ pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOu
     for i in (0..userhash.len()).step_by(16) {
         let hex = &userhash[i..i + 16];
         let num = u64::from_str_radix(hex, 16).unwrap();
-        hash_input_hex.push(GoldilocksField::from_canonical_u64(num));
+        hash_input_hex.push(F::from_canonical_u64(num));
     }
 
-    // convert nonce to GoldilocksField
-    let nonce_field = GoldilocksField::from_canonical_u64(nonce);
+    // convert nonce to Field
+    let nonce_field = F::from_canonical_u64(nonce);
     hash_input.push(nonce_field);
 
     PoseidonHash::hash_no_pad(hash_input.as_slice())

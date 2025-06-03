@@ -1,19 +1,24 @@
 use plonky2::{fri::{reduction_strategies::FriReductionStrategy, FriConfig}, plonk::{circuit_data::CircuitConfig, config::{GenericConfig, PoseidonGoldilocksConfig}}};
+use plonky2::field::types::Field64;
 
 // change size of each circuits here
-pub const BATCH_SIZE: usize = 1024;
+pub const BATCH_SIZE: usize = 512;
 pub const RECURSIVE_SIZE: usize = 8;
 
-// these should not be changed without refactoring large part of the code
 pub const D: usize = 2;
-pub type C = PoseidonGoldilocksConfig; 
+pub type C = PoseidonGoldilocksConfig;
 pub type F = <C as GenericConfig<D>>::F;
 pub type H = <C as GenericConfig<D>>::Hasher;
+
+// max possible integer value for a single account balance
+// this is used to make overflow check faster
+pub const MAX_ACCOUNT_BALANCE: u64 = (F::ORDER - 1) / 2 / BATCH_SIZE as u64;
+pub const MAX_ACCOUNT_BALANCE_BITS: usize = MAX_ACCOUNT_BALANCE.ilog2() as usize;
 
 // batch circuit config
 pub const BATCH_CIRCUIT_CONFIG: CircuitConfig = CircuitConfig {
     num_wires: 135,
-    num_routed_wires: 50,
+    num_routed_wires: 80,
     num_constants: 2,
     use_base_arithmetic_gate: true,
     security_bits: 100,
