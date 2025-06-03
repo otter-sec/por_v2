@@ -43,7 +43,7 @@ impl RecursiveCircuit {
         // create a circuit that takes RECURSIVE_SIZE (n) inputs (inner_circuit proofs) and check these constraints
         // --> Verify n proofs
         // --> Calculate sum of all inner_circuit balances (maybe store in 2 64bit targets)
-        // --> Check if no overflow?
+        // --> Check if no overflow
 
         // create targets for batch proofs (input)
         let mut inner_targets = Vec::new();

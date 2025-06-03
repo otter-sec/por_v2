@@ -67,7 +67,7 @@ impl BatchCircuit {
                     builder.mul_add(*balance, *value, acc)
                 });
 
-            builder.range_check(account.equity, 63);
+            builder.range_check(account.equity, 62);
         }
 
         // calculate the sum of all assets of all accounts
