@@ -13,7 +13,7 @@ pub type H = <C as GenericConfig<D>>::Hasher;
 // batch circuit config
 pub const BATCH_CIRCUIT_CONFIG: CircuitConfig = CircuitConfig {
     num_wires: 135,
-    num_routed_wires: 80,
+    num_routed_wires: 50,
     num_constants: 2,
     use_base_arithmetic_gate: true,
     security_bits: 100,

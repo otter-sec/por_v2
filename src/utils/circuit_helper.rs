@@ -15,6 +15,7 @@ pub fn is_negative(builder: &mut CircuitBuilder<F, D>, x: Target) -> BoolTarget 
     return is_negative;
 }
 
+#[inline]
 pub fn is_positive(builder: &mut CircuitBuilder<F, D>, x: Target) -> BoolTarget {
     let is_negative = is_negative(builder, x);
     return builder.not(is_negative);
