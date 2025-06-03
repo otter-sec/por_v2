@@ -1,12 +1,12 @@
 use crate::circuits::batch_circuit::BatchCircuit;
+use crate::circuits::recursive_circuit::RecursiveCircuit;
 use crate::config::*;
 use crate::log_warning;
-use crate::utils::logger::*;
 use crate::merkle_tree::MerkleTree;
 use crate::types::*;
-use crate::circuits::recursive_circuit::RecursiveCircuit;
-use crate::utils::utils::calculate_with_decimals;
-use crate::utils::utils::{hash_account, pis_to_hash_bytes, format_timestamp};
+use crate::utils::helper_utils::calculate_with_decimals;
+use crate::utils::helper_utils::{format_timestamp, hash_account, pis_to_hash_bytes};
+use crate::utils::logger::*;
 use crate::{log_info, log_success};
 use plonky2::field::types::PrimeField64;
 use plonky2::plonk::config::GenericHashOut;
@@ -42,15 +42,27 @@ fn rebuild_root_circuit(asset_count: usize, depth: usize) -> RecursiveCircuit {
 
 fn print_global_information(final_proof: &FinalProof) {
     // print the global information
-    log_warning!("The following information was used to generate the proof, please manually verify if they are correct:");
-    log_warning!("NOTE: This is not real-time information, verify if the information is correct relative to the time of the proof generation");
-    log_warning!("NOTE2: Asset prices was rounded by some decimals, verify if they are close enough to the original price");
+    log_warning!(
+        "The following information was used to generate the proof, please manually verify if they are correct:"
+    );
+    log_warning!(
+        "NOTE: This is not real-time information, verify if the information is correct relative to the time of the proof generation"
+    );
+    log_warning!(
+        "NOTE2: Asset prices was rounded by some decimals, verify if they are close enough to the original price"
+    );
 
     // iterate through the asset names and prices
     println!("======================");
-    println!("Proof generation date: {}", format_timestamp(final_proof.timestamp).unwrap());
+    println!(
+        "Proof generation date: {}",
+        format_timestamp(final_proof.timestamp).unwrap()
+    );
     println!("Proof generation timestamp (ms): {}", final_proof.timestamp);
-    println!("Number of accounted assets: {}", final_proof.asset_names.len());
+    println!(
+        "Number of accounted assets: {}",
+        final_proof.asset_names.len()
+    );
 
     println!("\n-----Asset prices-----");
     for (i, asset_name) in final_proof.asset_names.iter().enumerate() {
@@ -58,23 +70,35 @@ fn print_global_information(final_proof: &FinalProof) {
             final_proof.asset_prices[i].try_into().unwrap(),
             final_proof.asset_decimals[i].usdt_decimals,
         );
-        println!("{}: US$ {}", asset_name, asset_price);
+        println!("{asset_name}: US$ {asset_price}");
     }
 
     println!("======================");
 }
 
-fn print_reserves(final_proof: &FinalProof){
+fn print_reserves(final_proof: &FinalProof) {
     println!();
-    log_info!("The following information is the final needed asset reserves, which was validated by the Zero-Knowledge proof");
-    log_warning!("NOTE: This is not real-time information, the information is relative to the time of the proof generation");
-    log_warning!("NOTE2: We cannot guarantee that all users were included in the proof, but you can check if you were included by verifying the inclusion proof");
+    log_info!(
+        "The following information is the final needed asset reserves, which was validated by the Zero-Knowledge proof"
+    );
+    log_warning!(
+        "NOTE: This is not real-time information, the information is relative to the time of the proof generation"
+    );
+    log_warning!(
+        "NOTE2: We cannot guarantee that all users were included in the proof, but you can check if you were included by verifying the inclusion proof"
+    );
 
     // iterate through the asset names and final balances
     println!("======================");
-    println!("Proof generation date: {}", format_timestamp(final_proof.timestamp).unwrap());
+    println!(
+        "Proof generation date: {}",
+        format_timestamp(final_proof.timestamp).unwrap()
+    );
     println!("Proof generation timestamp (ms): {}", final_proof.timestamp);
-    println!("Number of accounted assets: {}", final_proof.asset_names.len());
+    println!(
+        "Number of accounted assets: {}",
+        final_proof.asset_names.len()
+    );
 
     let asset_count = final_proof.asset_names.len();
     let final_balances_offsets = RecursiveCircuit::get_final_balances_offset(asset_count);
@@ -86,7 +110,7 @@ fn print_reserves(final_proof: &FinalProof){
             asset_reserves[i].to_canonical_u64().try_into().unwrap(),
             final_proof.asset_decimals[i].balance_decimals,
         );
-        println!("{}: {}", asset_name, asset_price);
+        println!("{asset_name}: {asset_price}");
     }
 
     println!("======================\n");
@@ -125,7 +149,7 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
     built_root_circuit
         .circuit_data
         .verify(final_proof.proof.clone())
-        .expect(format_error("Failed to verify proof").as_str());
+        .unwrap_or_else(|_| panic!("{}", format_error("Failed to verify proof")));
     log_success!("Proof is valid!");
 
     // 3. verify the asset prices with the asset prices in the proof
@@ -139,18 +163,18 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
             proof_asset_price.to_canonical_u64() == final_proof.asset_prices[i],
             "{}",
             format_error(
-                format!("Asset price for {} does not match the ZK proof", asset_name).as_str()
+                format!("Asset price for {asset_name} does not match the ZK proof").as_str()
             ),
         );
     }
     log_success!("Asset prices are valid!");
 
-
     // 4. verify if the decimals are valid
     log_info!("Verifying asset decimals...");
 
     // we need to verify if the sum of the usdt_decimals and balance_decimals is equal for every asset
-    let summed_decimals = final_proof.asset_decimals[0].balance_decimals + final_proof.asset_decimals[0].usdt_decimals;
+    let summed_decimals = final_proof.asset_decimals[0].balance_decimals
+        + final_proof.asset_decimals[0].usdt_decimals;
     for (i, asset_name) in final_proof.asset_names.iter().enumerate() {
         let asset_decimals = &final_proof.asset_decimals[i];
         let usdt_decimals = asset_decimals.usdt_decimals;
@@ -159,12 +183,10 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
         assert!(
             usdt_decimals + balance_decimals == summed_decimals,
             "{}",
-            format_error(
-                format!("Asset {} decimals are not valid", asset_name).as_str()
-            ),
+            format_error(format!("Asset {asset_name} decimals are not valid").as_str()),
         );
     }
-    
+
     log_success!("Asset decimals are valid!");
 
     // 5. verify the merkle tree root hash with the root hash in the proofs
@@ -192,30 +214,40 @@ pub fn verify_root(final_proof: FinalProof, merkle_tree: MerkleTree) {
     // all proofs are valid, print the reserves information
     print_reserves(&final_proof);
 
-
     log_success!("All proofs are valid!");
-
 }
 
 fn print_account_information(final_proof: &FinalProof, inclusion_proof: &InclusionProof) {
     // print the global information
-    log_warning!("The following information was used to generate the proof, please manually verify if they are correct:");
-    log_warning!("NOTE: This is not real-time information, verify if the information is correct relative to the time of the proof generation");
-    log_warning!("NOTE2: Some asset balances was rounded by some decimals, verify if they are close enough to the original balance");
+    log_warning!(
+        "The following information was used to generate the proof, please manually verify if they are correct:"
+    );
+    log_warning!(
+        "NOTE: This is not real-time information, verify if the information is correct relative to the time of the proof generation"
+    );
+    log_warning!(
+        "NOTE2: Some asset balances was rounded by some decimals, verify if they are close enough to the original balance"
+    );
 
     // iterate through the asset names and balances
     println!("======================");
-    println!("Proof generation date: {}", format_timestamp(final_proof.timestamp).unwrap());
+    println!(
+        "Proof generation date: {}",
+        format_timestamp(final_proof.timestamp).unwrap()
+    );
     println!("Proof generation timestamp (ms): {}", final_proof.timestamp);
-    println!("Number of accounted assets: {}", final_proof.asset_names.len());
+    println!(
+        "Number of accounted assets: {}",
+        final_proof.asset_names.len()
+    );
 
     println!("\n-----Asset balances-----");
     for (i, asset_name) in final_proof.asset_names.iter().enumerate() {
         let asset_balance = calculate_with_decimals(
-            inclusion_proof.user_balances[i].try_into().unwrap(),
+            inclusion_proof.user_balances[i],
             final_proof.asset_decimals[i].balance_decimals,
         );
-        println!("{}: {}", asset_name, asset_balance);
+        println!("{asset_name}: {asset_balance}");
     }
 
     println!("======================");
@@ -239,7 +271,7 @@ pub fn verify_user_inclusion(final_proof: FinalProof, inclusion_proof: Inclusion
 
     root_verifier_data
         .verify(final_proof.proof.clone())
-        .expect(format_error("Failed to verify proof").as_str());
+        .unwrap_or_else(|_| panic!("{}", format_error("Failed to verify proof")));
     log_success!("Global proof is valid!");
 
     // 2. verify if the user is included in the merkle tree
@@ -253,7 +285,7 @@ pub fn verify_user_inclusion(final_proof: FinalProof, inclusion_proof: Inclusion
     let account_hash = hash_account(
         &inclusion_proof.user_balances,
         inclusion_proof.user_hash.clone(),
-        inclusion_proof.nonce
+        inclusion_proof.nonce,
     )
     .to_bytes();
 

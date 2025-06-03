@@ -1,3 +1,5 @@
+use crate::config::*;
+use crate::utils::circuit_helper::*;
 use anyhow::Result;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::{HashOut, HashOutTarget};
@@ -10,8 +12,6 @@ use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
-use crate::utils::circuit_helper::*;
-use crate::config::*;
 
 // builder configs
 const D: usize = 2;
@@ -76,7 +76,7 @@ impl BatchCircuit {
         // calculate the sum of all assets of all accounts
         let total_asset_values = builder.add_virtual_targets(asset_count);
 
-        for i in 0..asset_count {
+        for (i, _) in total_asset_values.iter().enumerate().take(asset_count) {
             let mut sum = builder.zero();
             for account in &accounts {
                 let new_sum = builder.add(account.asset_balances[i], sum);
@@ -100,7 +100,7 @@ impl BatchCircuit {
         }
 
         // leaf hashes to calculate root hash
-        let leaf_hashes = builder.add_virtual_hashes(BATCH_SIZE as usize);
+        let leaf_hashes = builder.add_virtual_hashes(BATCH_SIZE);
 
         // calculate root hash by concatenating all leaf hashes
         let concat_hashes = leaf_hashes.iter().fold(Vec::new(), |mut acc, hash| {
@@ -122,7 +122,7 @@ impl BatchCircuit {
 
         BatchCircuit {
             asset_prices_target,
-            leaf_hashes: leaf_hashes,
+            leaf_hashes,
             account_targets: accounts,
             circuit_data: circuit,
         }
@@ -130,25 +130,22 @@ impl BatchCircuit {
 
     pub fn prove_batch_circuit(
         &self,
-        asset_prices: &Vec<u64>,
+        asset_prices: &[u64],
         accounts: &[Vec<i64>],
-        leaf_hashes: &Vec<HashOut<F>>,
+        leaf_hashes: &[HashOut<F>],
     ) -> Result<ProofWithPublicInputs<F, C, D>> {
         let mut pw = PartialWitness::<F>::new();
 
         // check if accounts length is equal to BATCH_SIZE
         assert!(
-            accounts.len() == BATCH_SIZE as usize,
+            accounts.len() == BATCH_SIZE,
             "The number of accounts must be equal to BATCH_SIZE"
         );
 
         // convert the asset prices to GoldilocksField
         let asset_prices: Vec<F> = asset_prices
             .iter()
-            .map(|&price| {
-                let price = price as u64;
-                F::from_canonical_u64(price)
-            })
+            .map(|&price| F::from_canonical_u64(price))
             .collect();
 
         // convert the account balances to GoldilocksField
@@ -157,10 +154,7 @@ impl BatchCircuit {
             .map(|account| {
                 account
                     .iter()
-                    .map(|&balance| {
-                        let balance = balance;
-                        F::from_noncanonical_i64(balance)
-                    })
+                    .map(|&balance| F::from_noncanonical_i64(balance))
                     .collect()
             })
             .collect();
@@ -191,7 +185,7 @@ impl BatchCircuit {
         Ok(proof)
     }
 
-    pub fn prove_empty(&self, asset_prices: &Vec<u64>) -> ProofWithPublicInputs<F, C, D> {
+    pub fn prove_empty(&self, asset_prices: &[u64]) -> ProofWithPublicInputs<F, C, D> {
         let mut pw = PartialWitness::<F>::new();
 
         let assset_count = self.asset_prices_target.len();
@@ -199,21 +193,24 @@ impl BatchCircuit {
         // convert asset_prices to Field vector and set the asset prices
         let asset_prices: Vec<F> = asset_prices
             .iter()
-            .map(|&price| {
-                let price = price as u64;
-                F::from_canonical_u64(price)
-            })
+            .map(|&price| F::from_canonical_u64(price))
             .collect();
-        pw.set_target_arr(&self.asset_prices_target, &asset_prices).unwrap();
+        pw.set_target_arr(&self.asset_prices_target, &asset_prices)
+            .unwrap();
 
         // set account targets
-        for (_, account) in self.account_targets.iter().enumerate() {
-            pw.set_target_arr(&account.asset_balances, vec![F::from_noncanonical_i64(0); assset_count].as_slice()).unwrap();
+        for account in self.account_targets.iter() {
+            pw.set_target_arr(
+                &account.asset_balances,
+                vec![F::from_noncanonical_i64(0); assset_count].as_slice(),
+            )
+            .unwrap();
         }
 
         // set leaf hashes
-        for (_, leaf_hash) in self.leaf_hashes.iter().enumerate() {
-            pw.set_hash_target(*leaf_hash, HashOut::<F>::default()).unwrap();
+        for leaf_hash in self.leaf_hashes.iter() {
+            pw.set_hash_target(*leaf_hash, HashOut::<F>::default())
+                .unwrap();
         }
 
         let mut timing = TimingTree::new("prove empty batch", Level::Trace);
@@ -222,7 +219,8 @@ impl BatchCircuit {
             &self.circuit_data.common,
             pw,
             &mut timing,
-        ).unwrap();
+        )
+        .unwrap();
 
         timing.print();
 
@@ -230,11 +228,7 @@ impl BatchCircuit {
     }
 
     // Verify a proof
-    pub fn verify_batch_circuit(
-        &self,
-        proof: ProofWithPublicInputs<F, C, D>,
-    ) -> Result<()> {
-    
+    pub fn verify_batch_circuit(&self, proof: ProofWithPublicInputs<F, C, D>) -> Result<()> {
         let res = self.circuit_data.verify(proof);
 
         if res.is_err() {
@@ -243,7 +237,7 @@ impl BatchCircuit {
 
         Ok(())
     }
-    
+
     // final balances public input
     pub fn get_final_balances_offset(asset_count: usize) -> std::ops::Range<usize> {
         let start = 0;
@@ -255,13 +249,13 @@ impl BatchCircuit {
     pub fn get_asset_prices_offset(asset_count: usize) -> std::ops::Range<usize> {
         // after the root hash
         let start = asset_count;
-        let end = asset_count*2;
+        let end = asset_count * 2;
         start..end
     }
 
     // root hash public input
     pub fn get_root_hash_offset(asset_count: usize) -> std::ops::Range<usize> {
-        let start = asset_count*2;
+        let start = asset_count * 2;
         let end = start + 4;
         start..end
     }

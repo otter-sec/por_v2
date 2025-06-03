@@ -1,6 +1,6 @@
 use crate::*;
 use anyhow::{Context, Result};
-use interprocess::local_socket::{prelude::*, GenericFilePath, GenericNamespaced, ListenerOptions, Name};
+use interprocess::local_socket::{GenericFilePath, ListenerOptions, Name, prelude::*};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::Arc;
@@ -12,7 +12,7 @@ pub const SOCKET_PATH: &str = "/tmp/por.sock";
 fn handle_client(
     stream: &interprocess::local_socket::Stream,
     merkle_tree: &MerkleTree,
-    nonces: &Vec<u64>,
+    nonces: &[u64],
     ledger: &Ledger,
 ) -> Result<()> {
     let mut reader = BufReader::new(stream);
@@ -38,13 +38,13 @@ fn handle_client(
                     std::env::current_dir()?.display(),
                     hash
                 );
-                println!("Writing inclusion proof to: {}", proof_path);
+                println!("Writing inclusion proof to: {proof_path}");
                 let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?; // Propagate serialization errors
                 std::fs::write(proof_path.clone(), inclusion_proof_json)?; // Propagate file writing errors
 
                 // Send the file path back to the client with a newline
                 writer
-                    .write_all(format!("{}\n", proof_path).as_bytes())
+                    .write_all(format!("{proof_path}\n").as_bytes())
                     .context("Failed to write to client")?;
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -54,7 +54,7 @@ fn handle_client(
                 continue;
             }
             Err(e) => {
-                eprintln!("Error reading from client: {}", e);
+                eprintln!("Error reading from client: {e}");
                 break;
             }
         }
@@ -62,7 +62,7 @@ fn handle_client(
     Ok(())
 }
 
-pub fn create_local_server<'a>(
+pub fn create_local_server(
     merkle_tree: MerkleTree,
     nonces: Vec<u64>,
     ledger: Ledger,
@@ -72,7 +72,7 @@ pub fn create_local_server<'a>(
     // This is important because bind will fail if the file already exists.
     if Path::new(SOCKET_PATH).exists() {
         std::fs::remove_file(SOCKET_PATH)
-            .with_context(|| format!("Failed to remove existing socket file: {}", SOCKET_PATH))?;
+            .with_context(|| format!("Failed to remove existing socket file: {SOCKET_PATH}"))?;
         log_info!("Removed existing socket file: {}", SOCKET_PATH);
     }
 
@@ -102,8 +102,7 @@ pub fn create_local_server<'a>(
                 );
             }
             return Err(e).context(format!(
-                "Failed to create listener for socket: {}",
-                SOCKET_PATH
+                "Failed to create listener for socket: {SOCKET_PATH}"
             ));
         }
     };
@@ -145,16 +144,16 @@ pub fn send_hash_to_server(hash: &str) -> Result<()> {
         .with_context(|| {
             // the server stopped running, remove the socket file
             let _ = std::fs::remove_file(SOCKET_PATH)
-                .with_context(|| format!("Failed to remove socket file: {}", SOCKET_PATH));
-            format!("Failed to connect to socket: {}, so it was deleted.
-The prover server probably stopped running. If you want to prove without the server, run the same command again", SOCKET_PATH)
+                .with_context(|| format!("Failed to remove socket file: {SOCKET_PATH}"));
+            format!("Failed to connect to socket: {SOCKET_PATH}, so it was deleted.
+The prover server probably stopped running. If you want to prove without the server, run the same command again")
         })?;
 
     // 2. Send the hash as a line of text.
-    let message = format!("{}\n", hash);
+    let message = format!("{hash}\n");
     stream
         .write_all(message.as_bytes())
-        .with_context(|| format!("Failed to send message to server: {}", message))?;
+        .with_context(|| format!("Failed to send message to server: {message}"))?;
 
     // 3. wait for the response from the server (the file path)
     let mut reader = BufReader::new(&stream);

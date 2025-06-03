@@ -58,7 +58,7 @@ fn get_ledger_values_from_file(filename: &str) -> Ledger {
 
         decimals.push(LedgerDecimals {
             usdt_decimals: asset_decimals,
-            balance_decimals: balance_decimals,
+            balance_decimals,
         });
     }
 
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
 
             // if userhash and socket exists, just send the hash to the server (only on unix)
             #[cfg(target_family = "unix")]
-            if (args.userhash.is_some() && std::fs::exists(SOCKET_PATH)?) {
+            if args.userhash.is_some() && std::fs::exists(SOCKET_PATH)? {
                 log_info!("Prover server is running, sending hash to the server...");
                 send_hash_to_server(args.userhash.as_ref().unwrap())?;
 
@@ -239,7 +239,7 @@ fn main() -> Result<()> {
 
                         create_local_server(merkle_tree, nonces, ledger)?
                     }
-                    Err(e) => log_error!(
+                    Err(_) => log_error!(
                         "Error while starting daemon process. Check if there are other process already being executed."
                     ),
                 }
@@ -261,7 +261,7 @@ fn main() -> Result<()> {
                     prove_user_inclusion_by_hash(userhash.clone(), &merkle_tree, &nonces, &ledger)?;
 
                 let inclusion_filename =
-                    format!("inclusion_proofs/inclusion_proof_{}.json", userhash);
+                    format!("inclusion_proofs/inclusion_proof_{userhash}.json");
                 let inclusion_proof_json = serde_json::to_string(&inclusion_proof)?;
                 std::fs::write(inclusion_filename, inclusion_proof_json)?;
             } else {
@@ -297,36 +297,31 @@ fn main() -> Result<()> {
                 std::fs::read_dir(".").context(format_error("Failed to read current directory"))?;
 
             // iterate over the entries in the current directory
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    // check the filename against the regex
-                    let filename = entry.file_name().to_string_lossy().to_string();
+            for entry in entries.flatten() {
+                // check the filename against the regex
+                let filename = entry.file_name().to_string_lossy().to_string();
 
-                    if re.is_match(&filename) {
-                        log_info!("Found and verifying inclusion proof file: {}", filename);
+                if re.is_match(&filename) {
+                    log_info!("Found and verifying inclusion proof file: {}", filename);
 
-                        // Read and deserialize the inclusion proof file
-                        let inclusion_proof_file: String =
-                            std::fs::read_to_string(entry.path()).context(format_error(
-                                &format!("Failed to read inclusion proof file: {}", filename),
-                            ))?;
-
-                        let inclusion_proof: InclusionProof = serde_json::from_str(
-                            &inclusion_proof_file,
-                        )
+                    // Read and deserialize the inclusion proof file
+                    let inclusion_proof_file: String = std::fs::read_to_string(entry.path())
                         .context(format_error(&format!(
-                            "Failed to deserialize inclusion proof file: {}",
-                            filename
+                            "Failed to read inclusion proof file: {filename}"
                         )))?;
 
-                        // Verify the inclusion proof
-                        verify_user_inclusion(final_proof.clone(), inclusion_proof);
+                    let inclusion_proof: InclusionProof =
+                        serde_json::from_str(&inclusion_proof_file).context(format_error(
+                            &format!("Failed to deserialize inclusion proof file: {filename}"),
+                        ))?;
 
-                        log_success!(
-                            "Successfully verified inclusion proof for file: {}",
-                            filename
-                        );
-                    }
+                    // Verify the inclusion proof
+                    verify_user_inclusion(final_proof.clone(), inclusion_proof);
+
+                    log_success!(
+                        "Successfully verified inclusion proof for file: {}",
+                        filename
+                    );
                 }
             }
             println!();

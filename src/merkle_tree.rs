@@ -1,12 +1,15 @@
-use crate::{config::*, utils::utils::hash_n_subhashes, types::*};
+use crate::custom_serializer::base64;
+use crate::{config::*, types::*, utils::helper_utils::hash_n_subhashes};
 use plonky2::plonk::config::GenericHashOut;
 use serde::{Deserialize, Serialize};
-use crate::custom_serializer::base64;
 
 // This module implements a Merkle tree structure for storing and verifying data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
-    #[serde(serialize_with = "base64::serialize_option", deserialize_with = "base64::deserialize_option")]
+    #[serde(
+        serialize_with = "base64::serialize_option",
+        deserialize_with = "base64::deserialize_option"
+    )]
     hash: Option<Vec<u8>>,
     children: Option<Vec<Node>>,
 }
@@ -41,11 +44,11 @@ impl Node {
     ) {
         if current_depth == target_depth {
             result.push(self);
-        } else if current_depth < target_depth {
-            if let Some(ref mut children) = self.children {
-                for child in children {
-                    child.collect_nodes_at_depth_mut(target_depth, result, current_depth + 1);
-                }
+        } else if current_depth < target_depth
+            && let Some(ref mut children) = self.children
+        {
+            for child in children {
+                child.collect_nodes_at_depth_mut(target_depth, result, current_depth + 1);
             }
         }
     }
@@ -72,17 +75,15 @@ impl MerkleTree {
         let mut nodes = Vec::new();
 
         // chunk the leafs into RECURSIVE_SIZE length chunks
-        let chunks;
-
         // if batch is true, chunk the leafs into BATCH_SIZE length chunks --> only in the first depth
         let mut padded_nodes = Vec::new();
-        if batch {
+        let chunks = if batch {
             // account leafs are already padded with BATCH_SIZE, but we need to pad the batch_circuit nodes
-            chunks = leafs.chunks(BATCH_SIZE);           
+            leafs.chunks(BATCH_SIZE)
         } else {
             // must pad to be multiple of RECURSIVE_SIZE (if it is not the root)
-            chunks = leafs.chunks(RECURSIVE_SIZE);
-        }
+            leafs.chunks(RECURSIVE_SIZE)
+        };
 
         // pad to be multiple of RECURSIVE_SIZE
         if chunks.len() % RECURSIVE_SIZE != 0 {
@@ -101,18 +102,18 @@ impl MerkleTree {
 
         // if there is only one node (and it is not the batch circuit), set it as the root
         if nodes.len() == 1 && !batch {
-            return Self {
+            Self {
                 root: nodes[0].clone(),
                 depth: depth + 1, // minimum depth is 2 --> 1 for the leafs and 1 for the root
-            };
+            }
         } else {
             // otherwise, include the padding chunks and continue recursively generating the tree
             nodes.extend(padded_nodes);
-            return Self::new_from_leafs(nodes, depth + 1, false);
+            Self::new_from_leafs(nodes, depth + 1, false)
         }
     }
 
-    pub fn get_nodes_from_depth<'a>(&'a mut self, depth: usize) -> Vec<&'a mut Node> {
+    pub fn get_nodes_from_depth(&mut self, depth: usize) -> Vec<&mut Node> {
         let mut result = Vec::new();
 
         self.root.collect_nodes_at_depth_mut(depth, &mut result, 1);
@@ -146,11 +147,12 @@ impl MerkleTree {
 
         for current_depth in 1..self.depth {
             // calculate what is the next node to enter
-            node_leafs = RECURSIVE_SIZE.pow(self.depth as u32 - current_depth as u32 - 1) * BATCH_SIZE;
+            node_leafs =
+                RECURSIVE_SIZE.pow(self.depth as u32 - current_depth as u32 - 1) * BATCH_SIZE;
 
             // get the index of next node
             let index = (n - start_position) / node_leafs;
-            
+
             current_node = &current_node.children.as_ref().unwrap()[index];
             start_position += index * node_leafs;
 
@@ -169,7 +171,7 @@ impl MerkleTree {
         None
     }
 
-    fn verify_recursive(root_node: &Node) -> bool{
+    fn verify_recursive(root_node: &Node) -> bool {
         // check if the node is a leaf
         if root_node.children.is_none() {
             return true;
@@ -185,17 +187,21 @@ impl MerkleTree {
 
         // check if the node has a hash
         if root_node.hash.is_none() {
-            return false
+            return false;
         }
 
         // verify if the hash is the same as the hash of the children (Poseidon)
-        let children_hashes = root_node.children.as_ref().unwrap().iter()
+        let children_hashes = root_node
+            .children
+            .as_ref()
+            .unwrap()
+            .iter()
             .filter_map(|child| child.hash.clone())
             .collect::<Vec<_>>();
 
         let hash = hash_n_subhashes::<F, D>(&children_hashes).to_bytes();
         if root_node.hash.as_ref().unwrap() != &hash {
-            return false
+            return false;
         }
 
         true
@@ -212,12 +218,15 @@ impl MerkleTree {
 
         let mut current_node = &self.root;
 
-        for i in 0..path.len()-1 {
+        for i in 0..path.len() - 1 {
             // get the left and right hashes related to the leaf path node
-            let index = path[i+1]; // we use +1 to skip the root node (always 0 but it is included in the path)
+            let index = path[i + 1]; // we use +1 to skip the root node (always 0 but it is included in the path)
 
             let nodes = current_node.children.as_ref().unwrap();
-            let hashes = nodes.iter().map(|node| node.hash.clone().unwrap()).collect::<Vec<_>>();
+            let hashes = nodes
+                .iter()
+                .map(|node| node.hash.clone().unwrap())
+                .collect::<Vec<_>>();
 
             // split the hashes into left and right using our index as pivot
             let left_hashes_temp = hashes[0..index].to_vec();
@@ -241,7 +250,5 @@ impl MerkleTree {
         }
 
         merkle_proof.unwrap()
-
     }
-
 }

@@ -1,5 +1,6 @@
-use crate::config::*;
 use crate::circuits::circuit_registry::*;
+use crate::config::*;
+use crate::utils::circuit_helper::*;
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -10,7 +11,6 @@ use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::plonk::prover::prove;
 use plonky2::util::serialization::gate_serialization::log::Level;
 use plonky2::util::timing::TimingTree;
-use crate::utils::circuit_helper::*;
 
 // builder configs
 const D: usize = 2;
@@ -34,10 +34,7 @@ struct InnerCircuitTargets {
 }
 
 impl RecursiveCircuit {
-    pub fn new(
-        inner_circuit: &CircuitData<F, C, D>,
-        asset_count: usize,
-    ) -> RecursiveCircuit {
+    pub fn new(inner_circuit: &CircuitData<F, C, D>, asset_count: usize) -> RecursiveCircuit {
         let config = RECURSIVE_CIRCUIT_CONFIG;
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
@@ -59,7 +56,7 @@ impl RecursiveCircuit {
             let batch_balance = proof_target.public_inputs[balances_offset].to_vec();
 
             let inner_data = InnerCircuitTargets {
-                proof_target: proof_target,
+                proof_target,
                 verifier_target: verify_target,
                 asset_balances: batch_balance,
             };
@@ -90,7 +87,7 @@ impl RecursiveCircuit {
                 let is_sum2_positive = is_positive(&mut builder, final_balances[i]);
                 let is_both_positive = builder.and(is_sum1_positive, is_sum2_positive);
                 let is_result_negative = is_negative(&mut builder, new_summed_bal);
-                
+
                 let is_overflow = builder.and(is_both_positive, is_result_negative);
                 let is_not_overflow = builder.not(is_overflow);
                 builder.assert_bool(is_not_overflow);
@@ -102,13 +99,13 @@ impl RecursiveCircuit {
         // get the asset prices
         let asset_prices = inner_targets[0].proof_target.public_inputs
             [RecursiveCircuit::get_asset_prices_offset(asset_count)]
-            .to_vec();
+        .to_vec();
 
         // iterate through all circuits to verify if the asset prices are the same
-        for i in 0..RECURSIVE_SIZE {
-            let inner_asset_prices = inner_targets[i].proof_target.public_inputs
+        for inner_target in inner_targets.iter().take(RECURSIVE_SIZE) {
+            let inner_asset_prices = inner_target.proof_target.public_inputs
                 [RecursiveCircuit::get_asset_prices_offset(asset_count)]
-                .to_vec();
+            .to_vec();
 
             // CONSTRAINT: check if asset prices are the same
             // we cannot use builder.connect_array() since we are using Vec
@@ -117,19 +114,18 @@ impl RecursiveCircuit {
             }
         }
 
-
         // iterate through proofs to create the hashes
         let mut concat_hashes = Vec::new();
-        for i in 0..RECURSIVE_SIZE {
-            let hash_elements = inner_targets[i].proof_target.public_inputs
+        for inner_target in inner_targets.iter().take(RECURSIVE_SIZE) {
+            let hash_elements = inner_target.proof_target.public_inputs
                 [RecursiveCircuit::get_root_hash_offset(asset_count)]
-                .to_vec();
+            .to_vec();
 
-                concat_hashes.extend(hash_elements);
+            concat_hashes.extend(hash_elements);
         }
 
         let root_hash = builder.hash_n_to_hash_no_pad::<H>(concat_hashes);
-        
+
         // register public inputs
         builder.register_public_inputs(&final_balances); // sum of all assets of BATCH_SIZE accounts
         builder.register_public_inputs(&asset_prices); // asset prices in USD (each one with different decimals)
@@ -150,8 +146,13 @@ impl RecursiveCircuit {
 
         // set the inner circuit proofs
         for (i, inner_data) in self.inner_circuit_targets.iter().enumerate() {
-            pw.set_proof_with_pis_target(&inner_data.proof_target, &subproofs[i]).unwrap();
-            pw.set_verifier_data_target(&inner_data.verifier_target, &self.inner_circuit_data_verifier).unwrap();
+            pw.set_proof_with_pis_target(&inner_data.proof_target, &subproofs[i])
+                .unwrap();
+            pw.set_verifier_data_target(
+                &inner_data.verifier_target,
+                &self.inner_circuit_data_verifier,
+            )
+            .unwrap();
         }
 
         // prove the circuit
@@ -173,7 +174,7 @@ impl RecursiveCircuit {
     pub fn prove_empty(
         &self,
         circuit_registry: &mut CircuitRegistry,
-    ) -> ProofWithPublicInputs<F, C, D> {        
+    ) -> ProofWithPublicInputs<F, C, D> {
         let current_digest = self.circuit_data.verifier_only.circuit_digest;
 
         // see if it is already in the registry and return
@@ -184,14 +185,13 @@ impl RecursiveCircuit {
 
         // else, create the empty proof
         let inner_digest = self.inner_circuit_data_verifier.circuit_digest;
-        
+
         // get the inner circuit empty proof
         let inner_empty_proof = circuit_registry.get_empty_proof(inner_digest).unwrap();
 
         // create and return a new proof with the empty proof as input
         self.prove_recursive_circuit(vec![inner_empty_proof.clone(); RECURSIVE_SIZE])
     }
-
 
     // CAUTION: all offsets must be the same as in the batch circuit
 
@@ -206,13 +206,13 @@ impl RecursiveCircuit {
     pub fn get_asset_prices_offset(asset_count: usize) -> std::ops::Range<usize> {
         // after the root hash
         let start = asset_count;
-        let end = asset_count*2;
+        let end = asset_count * 2;
         start..end
     }
 
     // root hash public input
     pub fn get_root_hash_offset(asset_count: usize) -> std::ops::Range<usize> {
-        let start = asset_count*2;
+        let start = asset_count * 2;
         let end = start + 4;
         start..end
     }

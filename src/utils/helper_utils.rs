@@ -1,6 +1,7 @@
 use crate::config::*;
 use anyhow::Result;
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 use plonky2::{
     field::{extension::Extendable, goldilocks_field::GoldilocksField, types::Field},
     hash::{
@@ -12,8 +13,6 @@ use plonky2::{
         proof::ProofWithPublicInputs,
     },
 };
-use chrono::{DateTime, Utc};
-
 
 // NEED TO ADD PADDING TO RECURSIVE TREES
 
@@ -30,8 +29,8 @@ pub fn pad_accounts(
     let hash_nibbles = hashes[0].len();
 
     // only pad if the number of accounts is not a multiple of batch_size
-    if accounts.len() % batch_size as usize != 0 {
-        let padding = batch_size as usize - (accounts.len() % batch_size as usize);
+    if accounts.len() % batch_size != 0 {
+        let padding = batch_size - (accounts.len() % batch_size);
         for _ in 0..padding {
             padded_accounts.push(vec![0; asset_count]); // pad with zero balances
             padded_hashes.push("0".repeat(hash_nibbles)); // pad with zero hash
@@ -59,7 +58,7 @@ pub fn pad_recursive_proofs(
 
 // hash n subhashes
 pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
-    hashes: &Vec<Vec<u8>>,
+    hashes: &[Vec<u8>],
 ) -> HashOut<F> {
     // convert the u8 vector to HashOut then to GoldilocksField
     let hashout_inputs = hashes
@@ -69,11 +68,10 @@ pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
 
     let inputs: Vec<F> = hashout_inputs
         .iter()
-        .map(|h| h.elements.to_vec())
-        .flatten()
+        .flat_map(|h| h.elements.to_vec())
         .collect();
-    let hash = PoseidonHash::hash_no_pad(inputs.as_slice());
-    hash
+
+    PoseidonHash::hash_no_pad(inputs.as_slice())
 }
 
 // hash account balances and userhash
@@ -100,14 +98,13 @@ pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOu
 }
 
 // convert HashOut elements to hash bytes
-pub fn pis_to_hash_bytes<F: RichField + Extendable<D>, const D: usize>(pis: &Vec<F>) -> Vec<u8> {
+pub fn pis_to_hash_bytes<F: RichField + Extendable<D>, const D: usize>(pis: &[F]) -> Vec<u8> {
     HashOut::from_partial(pis).to_bytes()
 }
 
 pub fn calculate_with_decimals(value: i64, decimals: i64) -> BigDecimal {
     BigDecimal::new(value.into(), decimals)
 }
-
 
 pub fn format_timestamp(timestamp_milliseconds: u64) -> Result<String, &'static str> {
     // Convert u64 to i64. chrono::DateTime::from_timestamp_opt requires i64.
@@ -117,8 +114,8 @@ pub fn format_timestamp(timestamp_milliseconds: u64) -> Result<String, &'static 
 
     // Create a NaiveDateTime object from the timestamp (seconds) assuming UTC.
     // `from_timestamp_opt` returns None if the timestamp is out of the representable range.
-    let naive_datetime = DateTime::from_timestamp_millis(timestamp_i64)
-        .ok_or("Invalid timestamp value")?;
+    let naive_datetime =
+        DateTime::from_timestamp_millis(timestamp_i64).ok_or("Invalid timestamp value")?;
 
     // Convert the NaiveDateTime (UTC) to a DateTime<Utc>
     let datetime_utc = DateTime::<Utc>::from_naive_utc_and_offset(naive_datetime.naive_utc(), Utc);
