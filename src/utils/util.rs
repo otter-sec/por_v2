@@ -59,7 +59,7 @@ pub fn pad_recursive_proofs(
 
 // hash n subhashes
 pub fn hash_n_subhashes<F: RichField + Extendable<D>, const D: usize>(
-    hashes: &Vec<Vec<u8>>,
+    hashes: &[Vec<u8>],
 ) -> HashOut<F> {
     // convert the u8 vector to HashOut then to Field
     let hashout_inputs = hashes
@@ -99,7 +99,7 @@ pub fn hash_account(balances: &Vec<i64>, userhash: String, nonce: u64) -> HashOu
 }
 
 // convert HashOut elements to hash bytes
-pub fn pis_to_hash_bytes<F: RichField + Extendable<D>, const D: usize>(pis: &Vec<F>) -> Vec<u8> {
+pub fn pis_to_hash_bytes<F: RichField + Extendable<D>, const D: usize>(pis: &[F]) -> Vec<u8> {
     HashOut::from_partial(pis).to_bytes()
 }
 

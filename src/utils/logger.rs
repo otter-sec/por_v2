@@ -46,7 +46,7 @@ impl ProveProgress{
         let progress = self.total_progress;
         let bar_width = self.bar_width;
         // Ensure progress is within the valid range [0.0, 100.0]
-        let clamped_progress = progress.max(0.0).min(100.0);
+        let clamped_progress = progress.clamp(0.0, 100.0);
     
         // Calculate the number of filled characters for the bar
         let progress_chars = (clamped_progress / 100.0 * bar_width as f64).floor() as usize;
@@ -122,7 +122,7 @@ impl ProveInclusionProgress{
         let progress = (self.done_users as f64 / self.total_users as f64) * 100.0;
         let bar_width = self.bar_width;
         // Ensure progress is within the valid range [0.0, 100.0]
-        let clamped_progress = progress.max(0.0).min(100.0);
+        let clamped_progress = progress.clamp(0.0, 100.0);
     
         // Calculate the number of filled characters for the bar
         let progress_chars = (clamped_progress / 100.0 * bar_width as f64).floor() as usize;
@@ -168,7 +168,7 @@ macro_rules! log_success {
 #[macro_export]
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        eprintln!("\x1b[31m[-] {}\x1b[0m", format!($($arg)*));
+        eprintln!("\x1b[31m[-] {}\x1b[0m", format!($($arg)*))
     };
 }
 

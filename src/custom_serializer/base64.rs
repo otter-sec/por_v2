@@ -14,7 +14,7 @@ pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error>
     base64::decode(base64.as_bytes()).map_err(serde::de::Error::custom)
 }
 
-pub fn serialize_vec<S: Serializer>(v: &Vec<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
+pub fn serialize_vec<S: Serializer>(v: &[Vec<u8>], s: S) -> Result<S::Ok, S::Error> {
     let base64 = v.iter().map(base64::encode).collect::<Vec<_>>();
     Vec::<String>::serialize(&base64, s)
 }

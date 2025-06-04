@@ -12,7 +12,7 @@ pub const SOCKET_PATH: &str = "/tmp/por.sock";
 fn handle_client(
     stream: &interprocess::local_socket::Stream,
     merkle_tree: &MerkleTree,
-    nonces: &Vec<u64>,
+    nonces: &[u64],
     ledger: &Ledger,
 ) -> Result<()> {
     let mut reader = BufReader::new(stream);
@@ -62,7 +62,7 @@ fn handle_client(
     Ok(())
 }
 
-pub fn create_local_server<'a>(
+pub fn create_local_server(
     merkle_tree: MerkleTree,
     nonces: Vec<u64>,
     ledger: Ledger,

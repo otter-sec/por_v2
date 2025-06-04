@@ -98,27 +98,27 @@ impl RecursiveCircuit {
             .to_vec();
 
         // iterate through all circuits to verify if the asset prices are the same
-        for i in 0..RECURSIVE_SIZE {
-            let inner_asset_prices = inner_targets[i].proof_target.public_inputs
+        for inner_data in inner_targets.iter().take(RECURSIVE_SIZE) {
+            let inner_asset_prices = inner_data.proof_target.public_inputs
                 [RecursiveCircuit::get_asset_prices_offset(asset_count)]
                 .to_vec();
 
             // CONSTRAINT: check if asset prices are the same
             // we cannot use builder.connect_array() since we are using Vec
-            for j in 0..asset_count {
-                builder.connect(inner_asset_prices[j], asset_prices[j]);
+            for (j, price) in inner_asset_prices.iter().enumerate().take(asset_count) {
+                builder.connect(*price, asset_prices[j]);
             }
         }
 
 
         // iterate through proofs to create the hashes
         let mut concat_hashes = Vec::new();
-        for i in 0..RECURSIVE_SIZE {
-            let hash_elements = inner_targets[i].proof_target.public_inputs
+        for inner_data in inner_targets.iter().take(RECURSIVE_SIZE) {
+            let hash_elements = inner_data.proof_target.public_inputs
                 [RecursiveCircuit::get_root_hash_offset(asset_count)]
                 .to_vec();
 
-                concat_hashes.extend(hash_elements);
+            concat_hashes.extend(hash_elements);
         }
 
         let root_hash = builder.hash_n_to_hash_no_pad::<H>(concat_hashes);

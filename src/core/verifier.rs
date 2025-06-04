@@ -5,8 +5,8 @@ use crate::utils::logger::*;
 use crate::merkle_tree::MerkleTree;
 use crate::types::*;
 use crate::circuits::recursive_circuit::RecursiveCircuit;
-use crate::utils::utils::calculate_with_decimals;
-use crate::utils::utils::{hash_account, pis_to_hash_bytes, format_timestamp};
+use crate::utils::util::calculate_with_decimals;
+use crate::utils::util::{hash_account, pis_to_hash_bytes, format_timestamp};
 use crate::{log_info, log_success};
 use plonky2::field::types::PrimeField64;
 use plonky2::plonk::config::GenericHashOut;
@@ -212,7 +212,7 @@ fn print_account_information(final_proof: &FinalProof, inclusion_proof: &Inclusi
     println!("\n-----Asset balances-----");
     for (i, asset_name) in final_proof.asset_names.iter().enumerate() {
         let asset_balance = calculate_with_decimals(
-            inclusion_proof.user_balances[i].try_into().unwrap(),
+            inclusion_proof.user_balances[i],
             final_proof.asset_decimals[i].balance_decimals,
         );
         println!("{asset_name}: {asset_balance}");

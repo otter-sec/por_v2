@@ -10,9 +10,9 @@ pub fn is_negative(builder: &mut CircuitBuilder<F, D>, x: Target) -> BoolTarget 
     let min_neg_target = builder.constant(min_neg);
     let divided = builder.div(x, min_neg_target);
     let one = builder.one();
-    let is_negative = builder.is_equal(divided, one);
 
-    is_negative
+    // return if negative
+    builder.is_equal(divided, one)
 }
 
 #[inline]

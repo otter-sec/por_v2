@@ -80,12 +80,12 @@ impl BatchCircuit {
         // calculate the sum of all assets of all accounts
         let total_asset_values = builder.add_virtual_targets(asset_count);
 
-        for i in 0..asset_count {
+        for (i, total_value) in total_asset_values.iter().enumerate().take(asset_count) {
             let mut sum = builder.zero();
             for account in &accounts {
                 sum = builder.add(account.asset_balances[i], sum);
             }
-            builder.connect(sum, total_asset_values[i]);
+            builder.connect(sum, *total_value);
         }
 
         // leaf hashes to calculate root hash
@@ -119,9 +119,9 @@ impl BatchCircuit {
 
     pub fn prove_batch_circuit(
         &self,
-        asset_prices: &Vec<u64>,
+        asset_prices: &[u64],
         accounts: &[Vec<i64>],
-        leaf_hashes: &Vec<HashOut<F>>,
+        leaf_hashes: &[HashOut<F>],
     ) -> Result<ProofWithPublicInputs<F, C, D>> {
         let mut pw = PartialWitness::<F>::new();
 
@@ -134,10 +134,7 @@ impl BatchCircuit {
         // convert the asset prices to Numeric Field
         let asset_prices: Vec<F> = asset_prices
             .iter()
-            .map(|&price| {
-                let price = price;
-                F::from_canonical_u64(price)
-            })
+            .map(|&p| F::from_canonical_u64(p))
             .collect();
 
         // convert the account balances to Numeric Field
@@ -146,10 +143,7 @@ impl BatchCircuit {
             .map(|account| {
                 account
                     .iter()
-                    .map(|&balance| {
-                        let balance = balance;
-                        F::from_noncanonical_i64(balance)
-                    })
+                    .map(|&b| F::from_noncanonical_i64(b))
                     .collect()
             })
             .collect();
@@ -180,7 +174,7 @@ impl BatchCircuit {
         Ok(proof)
     }
 
-    pub fn prove_empty(&self, asset_prices: &Vec<u64>) -> ProofWithPublicInputs<F, C, D> {
+    pub fn prove_empty(&self, asset_prices: &[u64]) -> ProofWithPublicInputs<F, C, D> {
         let mut pw = PartialWitness::<F>::new();
 
         let assset_count = self.asset_prices_target.len();
@@ -188,10 +182,7 @@ impl BatchCircuit {
         // convert asset_prices to Field vector and set the asset prices
         let asset_prices: Vec<F> = asset_prices
             .iter()
-            .map(|&price| {
-                let price = price;
-                F::from_canonical_u64(price)
-            })
+            .map(|&p| F::from_canonical_u64(p))
             .collect();
         pw.set_target_arr(&self.asset_prices_target, &asset_prices).unwrap();
 

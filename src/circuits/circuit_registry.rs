@@ -23,7 +23,7 @@ pub struct CircuitRegistry{
 
 
 impl CircuitRegistry {
-    pub fn new(batch_circuit: BatchCircuit, asset_prices: &Vec<u64>) -> Self {
+    pub fn new(batch_circuit: BatchCircuit, asset_prices: &[u64]) -> Self {
 
         let empty_batch_proof = batch_circuit.prove_empty(asset_prices);
 
@@ -44,26 +44,21 @@ impl CircuitRegistry {
         self.recursive_circuits.get(&digest)
     }
 
-    pub fn get_empty_proof(&mut self, digest: HashOut<F>) -> Option<&ProofWithPublicInputs<F, C, D>> {
-        // check if the digest is from a recursive circuit
-        let recursive_entry = self.recursive_circuits.get(&digest);
-
-        if recursive_entry.is_some() {
+    pub fn get_empty_proof(&self, circuit_digest: HashOut<F>) -> Option<&ProofWithPublicInputs<F, C, D>> {
+        let recursive_entry = self.recursive_circuits.get(&circuit_digest);
+        
+        if let Some(entry) = recursive_entry {
             // check if the empty proof is already in the registry
-            if recursive_entry.unwrap().empty_proof.is_some(){
-                return recursive_entry.unwrap().empty_proof.as_ref();
-            }
-            else {
-                return None;
+            if entry.empty_proof.is_some() {
+                return entry.empty_proof.as_ref();
             }
         }
 
         // if recursive entry is not found it is from the batch circuit (double check)
-        if digest == self.batch_circuit.circuit.circuit_data.verifier_only.circuit_digest {
+        if circuit_digest == self.batch_circuit.circuit.circuit_data.verifier_only.circuit_digest {
             return Some(&self.batch_circuit.empty_proof);
         }
 
-        // else, return None
         None
     }
 

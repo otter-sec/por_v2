@@ -1,3 +1,3 @@
 pub mod logger;
-pub mod utils;
+pub mod util;
 pub mod circuit_helper;

@@ -15,7 +15,7 @@ use core::verifier::{verify_root, verify_user_inclusion};
 use merkle_tree::*;
 use plonky2::hash::hash_types::HashOut;
 use plonky2::plonk::circuit_data::VerifierCircuitData;
-use plonky2::plonk::config::{GenericHashOut};
+use plonky2::plonk::config::GenericHashOut;
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use regex::Regex;
 use std::fs::File;
@@ -238,7 +238,7 @@ fn main() -> Result<()> {
 
                         create_local_server(merkle_tree, nonces, ledger)?
                     }
-                    Err(e) => log_error!(
+                    Err(_) => log_error!(
                         "Error while starting daemon process. Check if there are other process already being executed."
                     ),
                 }
@@ -296,35 +296,31 @@ fn main() -> Result<()> {
                 std::fs::read_dir(".").context(format_error("Failed to read current directory"))?;
 
             // iterate over the entries in the current directory
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    // check the filename against the regex
-                    let filename = entry.file_name().to_string_lossy().to_string();
+            for entry in entries.flatten() {
+                // check the filename against the regex
+                let filename = entry.file_name().to_string_lossy().to_string();
 
-                    if re.is_match(&filename) {
-                        log_info!("Found and verifying inclusion proof file: {}", filename);
+                if re.is_match(&filename) {
+                    log_info!("Found and verifying inclusion proof file: {}", filename);
 
-                        // Read and deserialize the inclusion proof file
-                        let inclusion_proof_file: String =
-                            std::fs::read_to_string(entry.path()).context(format_error(
-                                &format!("Failed to read inclusion proof file: {filename}"),
-                            ))?;
-
-                        let inclusion_proof: InclusionProof = serde_json::from_str(
-                            &inclusion_proof_file,
-                        )
+                    // Read and deserialize the inclusion proof file
+                    let inclusion_proof_file: String = std::fs::read_to_string(entry.path())
                         .context(format_error(&format!(
-                            "Failed to deserialize inclusion proof file: {filename}"
+                            "Failed to read inclusion proof file: {filename}"
                         )))?;
 
-                        // Verify the inclusion proof
-                        verify_user_inclusion(final_proof.clone(), inclusion_proof);
+                    let inclusion_proof: InclusionProof =
+                        serde_json::from_str(&inclusion_proof_file).context(format_error(
+                            &format!("Failed to deserialize inclusion proof file: {filename}"),
+                        ))?;
 
-                        log_success!(
-                            "Successfully verified inclusion proof for file: {}",
-                            filename
-                        );
-                    }
+                    // Verify the inclusion proof
+                    verify_user_inclusion(final_proof.clone(), inclusion_proof);
+
+                    log_success!(
+                        "Successfully verified inclusion proof for file: {}",
+                        filename
+                    );
                 }
             }
             println!();

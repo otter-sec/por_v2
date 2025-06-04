@@ -1,7 +1,7 @@
 use plonky2::plonk::config::GenericHashOut;
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use serde::{Deserialize, Serialize};
-use crate::utils::utils::hash_n_subhashes;
+use crate::utils::util::hash_n_subhashes;
 use crate::config::*;
 use crate::custom_serializer::base64;
 

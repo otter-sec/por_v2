@@ -9,7 +9,7 @@ use crate::{
     circuits::batch_circuit::BatchCircuit,
     circuits::circuit_registry::CircuitRegistry,
     merkle_tree::{MerkleTree, Node},
-    utils::utils::*,
+    utils::util::*,
     *,
 };
 use anyhow::Result;
@@ -378,7 +378,7 @@ pub fn prove_user_inclusion(
 pub fn prove_user_inclusion_by_hash(
     user_hash: String,
     merkle_tree: &MerkleTree,
-    nonces: &Vec<u64>,
+    nonces: &[u64],
     ledger: &Ledger,
 ) -> Result<InclusionProof> {
     // get the user index from the hash

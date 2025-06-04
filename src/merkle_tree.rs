@@ -1,4 +1,4 @@
-use crate::{config::*, utils::utils::hash_n_subhashes, types::*};
+use crate::{config::*, utils::util::hash_n_subhashes, types::*};
 use plonky2::plonk::config::GenericHashOut;
 use serde::{Deserialize, Serialize};
 use crate::custom_serializer::base64;
@@ -71,18 +71,15 @@ impl MerkleTree {
         // recursively generate the entire tree structure from the leafs
         let mut nodes = Vec::new();
 
-        // chunk the leafs into RECURSIVE_SIZE length chunks
-        let chunks;
-
         // if batch is true, chunk the leafs into BATCH_SIZE length chunks --> only in the first depth
         let mut padded_nodes = Vec::new();
-        if batch {
+        let chunks = if batch {
             // account leafs are already padded with BATCH_SIZE, but we need to pad the batch_circuit nodes
-            chunks = leafs.chunks(BATCH_SIZE);           
+            leafs.chunks(BATCH_SIZE)           
         } else {
             // must pad to be multiple of RECURSIVE_SIZE (if it is not the root)
-            chunks = leafs.chunks(RECURSIVE_SIZE);
-        }
+            leafs.chunks(RECURSIVE_SIZE)
+        };
 
         // pad to be multiple of RECURSIVE_SIZE
         if chunks.len() % RECURSIVE_SIZE != 0 {
