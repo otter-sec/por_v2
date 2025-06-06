@@ -114,10 +114,7 @@ fn prove_recursively(
     }
 
     // add the recursive circuit to the registry (only if it is not the root circuit)
-    let inner_circuit_digest = recursive_circuit
-        .circuit_data
-        .verifier_only
-        .circuit_digest;
+    let inner_circuit_digest = recursive_circuit.circuit_data.verifier_only.circuit_digest;
     circuit_registry.add_recursive_circuit(recursive_circuit, merkle_depth.unwrap());
 
     // get the nodes from the merkle tree at the current depth
@@ -240,10 +237,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     let mut merkle_tree = MerkleTree::new_from_leafs(leaf_nodes, 1, true);
 
     // create the circuit registry
-    let batch_circuit_digest = batch_circuit
-        .circuit_data
-        .verifier_only
-        .circuit_digest;
+    let batch_circuit_digest = batch_circuit.circuit_data.verifier_only.circuit_digest;
     let mut circuit_registry = CircuitRegistry::new(batch_circuit, &ledger.asset_prices);
 
     // populate the batch nodes
@@ -306,11 +300,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     let asset_prices = ledger.asset_prices;
 
     // serialize final proof and merkle tree using serde_json
-    let root_circuit_verifier_data: VerifierCircuitData<
-        F,
-        C,
-        D,
-    > = circuit_registry
+    let root_circuit_verifier_data: VerifierCircuitData<F, C, D> = circuit_registry
         .get_recursive_circuit_by_depth(1)
         .unwrap()
         .circuit
@@ -401,109 +391,95 @@ pub fn prove_inclusion_all_batched(
     nonces: Vec<u64>,
 ) -> Result<()> {
     let total_hashes = ledger.hashes.len();
-
-    // Group hashes by their first 3 characters
-    let mut hash_groups: HashMap<String, Vec<(usize, String)>> = HashMap::new();
-
-    for (index, userhash) in ledger.hashes.iter().enumerate() {
-        let bundle_key = if userhash.len() >= 3 {
-            userhash[0..3].to_string()
-        } else {
-            userhash.clone() // fallback for hashes shorter than 3 characters
-        };
-
-        hash_groups
-            .entry(bundle_key)
-            .or_default()
-            .push((index, userhash.clone()));
-    }
-
-    let total_groups = hash_groups.len();
-    let mut processed_groups = 0;
-    let mut processed_hashes = 0;
+    let num_cpus = rayon::current_num_threads();
 
     log_info!(
-        "Processing {} hash groups with {} total hashes...",
-        total_groups,
-        total_hashes
+        "Processing {} hashes in batches grouped by first 3 characters using {} threads...",
+        total_hashes,
+        num_cpus
     );
 
-    // Process each group sequentially to control memory usage
-    for (bundle_key, hash_indices) in hash_groups {
-        log_info!(
-            "Processing group '{}' with {} hashes...",
-            bundle_key,
-            hash_indices.len()
-        );
-
-        // Wrap the progress state for this batch
-        let progress = Arc::new(Mutex::new(ProveInclusionProgress::new(total_hashes)));
-
-        // Set initial progress to reflect already processed hashes
-        {
-            let mut prog = progress.lock().unwrap();
-            prog.update_progress(processed_hashes);
-        }
-
-        // Process this group's hashes in parallel and collect as HashMap<hash, proof>
-        let batch_result: Result<HashMap<String, InclusionProof>> = hash_indices
-            .par_iter()
-            .map(|(index, userhash)| {
-                let inclusion_proof = prove_user_inclusion(
-                    *index,
-                    userhash.clone(),
-                    nonces[*index],
-                    merkle_tree,
-                    ledger,
-                )?;
-
-                // Update the progress bar
-                {
-                    let mut prog = progress.lock().unwrap();
-                    prog.update_progress(1);
-                }
-
-                Ok((userhash.clone(), inclusion_proof))
-            })
-            .collect(); // Collect results into a HashMap<String, InclusionProof>
-
-        // Handle the batch result
-        match batch_result {
-            Ok(inclusion_proofs_map) => {
-                // Write the batch to file immediately as a compressed object with hash: proof format
-                let bundle_filename =
-                    format!("inclusion_proofs/inclusion_proofs_{bundle_key}.json.zst");
-                let bundle_json = serde_json::to_string(&inclusion_proofs_map)?;
-
-                // Compress the JSON data using zstd (much faster than gzip)
-                let compressed_data = zstd::encode_all(bundle_json.as_bytes(), 1)?; // Level 1 = fastest
-                std::fs::write(&bundle_filename, compressed_data)?;
-
-                processed_hashes += hash_indices.len();
-                processed_groups += 1;
-
-                {
-                    let prog = progress.lock().unwrap();
-                    prog.clear_bar();
-                }
-
-                log_success!(
-                    "Completed group '{}' ({}/{} groups) - compressed to {}",
-                    bundle_key,
-                    processed_groups,
-                    total_groups,
-                    bundle_filename
-                );
-            }
-            Err(e) => {
-                {
-                    let prog = progress.lock().unwrap();
-                    prog.clear_bar();
-                }
-                return Err(e);
-            }
-        }
+    // Group hashes by their first 3 characters (keeping original approach)
+    let mut groups: HashMap<String, Vec<(usize, &String)>> = HashMap::new();
+    for (index, userhash) in ledger.hashes.iter().enumerate() {
+        let prefix = userhash.chars().take(3).collect::<String>();
+        groups
+            .entry(prefix)
+            .or_insert_with(Vec::new)
+            .push((index, userhash));
     }
+
+    let total_groups = groups.len();
+    let processed_groups = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let processed_hashes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+    log_info!(
+        "Created {} groups based on first 3 characters",
+        total_groups
+    );
+
+    // Create inclusion_proofs directory if it doesn't exist
+    std::fs::create_dir_all("inclusion_proofs")?;
+
+    // Process groups in parallel with optimized performance
+    let processing_result: Result<()> = groups.par_iter().try_for_each(
+        |(prefix, group)| -> Result<()> {
+            // Process this group's hashes in parallel and collect as HashMap<hash, proof>
+            let group_result: Result<HashMap<String, InclusionProof>> = group
+                .par_iter()
+                .map(|(index, userhash)| -> Result<(String, InclusionProof)> {
+                    let inclusion_proof = prove_user_inclusion(
+                        *index,
+                        (*userhash).clone(),
+                        nonces[*index],
+                        merkle_tree,
+                        ledger,
+                    )?;
+
+                    Ok(((*userhash).clone(), inclusion_proof))
+                })
+                .collect();
+
+            // Handle the group result
+            match group_result {
+                Ok(inclusion_proofs_map) => {
+                    // Write the group to file immediately as a compressed object
+                    let bundle_filename =
+                        format!("inclusion_proofs/inclusion_proofs_{prefix}.json.zst");
+                    let bundle_json = serde_json::to_string(&inclusion_proofs_map)?;
+
+                    // Compress the JSON data using zstd with optimal settings for speed
+                    let compressed_data = zstd::encode_all(bundle_json.as_bytes(), 3)?; // Level 3 = good speed/compression balance
+                    std::fs::write(&bundle_filename, compressed_data)?;
+
+                    // Update counters atomically (much faster than mutex)
+                    let completed_groups =
+                        processed_groups.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                    let completed_hashes = processed_hashes
+                        .fetch_add(group.len(), std::sync::atomic::Ordering::Relaxed)
+                        + group.len();
+
+                    // Only log progress every 10 groups or at completion to reduce I/O overhead
+                    if completed_groups % 10 == 0 || completed_groups == total_groups {
+                        log_success!(
+                            "Completed group '{}' ({}/{} groups, {}/{} hashes) - compressed to {}",
+                            prefix,
+                            completed_groups,
+                            total_groups,
+                            completed_hashes,
+                            total_hashes,
+                            bundle_filename
+                        );
+                    }
+
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        },
+    );
+
+    processing_result?;
 
     log_success!(
         "Successfully processed all {} groups with {} total inclusion proofs!",
