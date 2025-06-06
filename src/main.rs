@@ -151,6 +151,13 @@ fn assert_config(final_proof: &FinalProof) {
             final_proof.recursive_size
         );
     }
+    if final_proof.prover_version != format!("v{}", env!("CARGO_PKG_VERSION")) {
+        log_error!(
+            "Prover version mismatch! Expected: {}, Found: {}. Consider downloading the correct version from the repository",
+            env!("CARGO_PKG_VERSION"),
+            final_proof.prover_version
+        );
+    }
 }
 
 fn main() -> Result<()> {
