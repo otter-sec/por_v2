@@ -33,6 +33,7 @@ pub struct FinalProof{
     pub asset_decimals: Vec<LedgerDecimals>,
     pub tree_depth: usize,
     pub timestamp: u64,
+    pub prover_version: String,
     // custom serialization --> for whatever reason Serialize and Deserialize traits are not implemented for VerifierCircuitData
     // so we serialize it as a Vec<u8> and deserialize it back in our code
     #[serde(serialize_with = "base64::serialize", deserialize_with = "base64::deserialize")]

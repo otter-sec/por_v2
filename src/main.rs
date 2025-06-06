@@ -111,6 +111,8 @@ enum Commands {
     Verify,
     /// Verifies an inclusion proof
     VerifyInclusion,
+    /// Get the version of the code
+    Version,
 }
 
 // Define a separate struct for the ProveInclusion subcommand arguments
@@ -325,6 +327,10 @@ fn main() -> Result<()> {
             }
             println!();
             log_success!("All inclusion proofs are valid!");
+        }
+        Commands::Version => {
+            println!("PoR version: v{}", env!("CARGO_PKG_VERSION"));
+            std::process::exit(0);
         }
     }
 

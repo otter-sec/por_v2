@@ -330,6 +330,7 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
             .to_bytes(&DefaultGateSerializer)
             .unwrap(),
         timestamp: ledger.timestamp,
+        prover_version: format!("v{}", env!("CARGO_PKG_VERSION")),
     };
 
     log_success!("Created final proof successfully!");

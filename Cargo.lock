@@ -667,7 +667,7 @@ dependencies = [
 
 [[package]]
 name = "plonky2_por"
-version = "0.1.0"
+version = "1.3.0"
 dependencies = [
  "anyhow",
  "base64",
