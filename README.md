@@ -177,16 +177,16 @@ We ran benchmark tests with a ledger containing 750k users and 53 assets using t
 
 ```rs
 pub const BATCH_SIZE: usize = 512;
-pub const RECURSIVE_SIZE: usize = 32;
+pub const RECURSIVE_SIZE: usize = 8;
 ```
 
 **Execution timing**
 
 The tests were executed in a Mac M3 Pro (12 cores) and here are the results:
 
-- `prove` --> took 332s (~5.5 minutes)
-- `prove-inclusion --all-batched` --> took 7s
-- `verify` --> took 14s with low RAM consumption
+- `prove` --> took 470s (~8 minutes)
+- `prove-inclusion --all-batched` --> took 13s
+- `verify` --> took 6s with low RAM consumption
 - `verify-inclusion` --> took 20ms with low RAM consumption
 
 **Proof sizes**
@@ -197,7 +197,7 @@ After proving global proof and all user inclusion proofs, these are the proof fi
 - `merkle_tree.json` --> 52MB
 - `private_nonces.json` --> 15MB
 - Single inclusion proof --> 52KB
-- All inclusion proofs (batched/compressed) --> 225MB
+- All inclusion proofs (batched/compressed) --> 335MB
 
 
 > NOTE: since storing all inclusion proofs is disk-consuming, another option is to create user inclusion proofs on-demand using --userhash CLI parameter in `prove-inclusion` subcommand.
