@@ -136,7 +136,7 @@ To prove inclusion of a specific user, you can use the `--userhash <hash>` flag.
 
 **Proving all users**
 
-To prove all users at one-shot, simply put the `--all` flag. It will create all proofs inside the `inclusion_proofs/` directory, which may consume a lot of disk space depending on the amount of users.
+To prove all users at one-shot, simply put the `--all` flag. It will create all proofs inside the `inclusion_proofs/` directory, which may consume a lot of disk space depending on the amount of users. If you want a less-disk consuming approach you can use `--all-batched` flag. It will group users by the first 3 chars of the `userhash` and bundle all the proofs of a group into a compressed file.
 
 
 > **WARNING: THE INCLUSION PROOF SHOULD NOT BE PUBLIC. EACH PROOF MUST BE SHARED WITH THE RELATED USER ONLY. THE FILE CONTAINS THE USER ACCOUNT BALANCE INFORMATION, WHICH MUST BE KEPT SECRET.**
@@ -173,19 +173,19 @@ cargo build --release
 
 ## Benchmark
 
-We ran benchmark tests with a ledger containing 1M users and 60 assets using the default configuration in `config.rs`:
+We ran benchmark tests with a ledger containing 750k users and 53 assets using this configuration in `config.rs`:
 
 ```rs
-pub const BATCH_SIZE: usize = 1024;
-pub const RECURSIVE_SIZE: usize = 8;
+pub const BATCH_SIZE: usize = 512;
+pub const RECURSIVE_SIZE: usize = 32;
 ```
 
 **Execution timing**
 
-The tests were executed in a 24 physical core machine (48-core with hyperthreading) and 184GB RAM, and these were the results:
+The tests were executed in a Mac M3 Pro (12 cores) and here are the results:
 
-- `prove` --> took 667s (~11 minutes) with a RAM usage spike of 10GB (including cache)
-- `prove-inclusion --all` --> took 58s (~1 minute) with a RAM usage spike of 9GB (excluding cache --> cache consumed more than 50GB since it was writing 1 million files on the disk)
+- `prove` --> took 332s (~5.5 minutes)
+- `prove-inclusion --all-batched` --> took 7s
 - `verify` --> took 14s with low RAM consumption
 - `verify-inclusion` --> took 20ms with low RAM consumption
 
@@ -193,13 +193,14 @@ The tests were executed in a 24 physical core machine (48-core with hyperthreadi
 
 After proving global proof and all user inclusion proofs, these are the proof file sizes:
 
-- `final_proof.json` --> 456KB
-- `merkle_tree.json` --> 69MB
+- `final_proof.json` --> 448KB
+- `merkle_tree.json` --> 52MB
+- `private_nonces.json` --> 15MB
 - Single inclusion proof --> 52KB
-- All inclusion proofs (1M files) --> 50GB
+- All inclusion proofs (batched/compressed) --> 225MB
 
 
-> NOTE: since storing all inclusion proofs are disk-consuming, another option is to create user inclusion proofs on-demand using --userhash CLI parameter in `prove-inclusion` subcommand.
+> NOTE: since storing all inclusion proofs is disk-consuming, another option is to create user inclusion proofs on-demand using --userhash CLI parameter in `prove-inclusion` subcommand.
 
 ## Testing
 
