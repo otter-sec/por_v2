@@ -177,7 +177,19 @@ fn main() -> Result<()> {
             log_info!(
                 "Starting to prove reserves... This might take some hours depending on the ledger size..."
             );
-            prove_global(ledger)?;
+            let (final_proof, merkle_tree, account_nonces) = prove_global(ledger)?;
+            
+            // Serialize and save the results to files
+            log_info!("Serializing final proof, merkle tree and nonces into disk...");
+            let final_proof_json = serde_json::to_string(&final_proof)?;
+            let merkle_tree_json = serde_json::to_string(&merkle_tree)?;
+            let nonces_json = serde_json::to_string(&account_nonces)?;
+
+            std::fs::write("final_proof.json", final_proof_json)?;
+            std::fs::write("merkle_tree.json", merkle_tree_json)?;
+            std::fs::write("private_nonces.json", nonces_json)?;
+            
+            log_success!("Serialization completed successfully!");
         }
         Commands::ProveInclusion(args) => {
             // create the inclusion_proofs directory

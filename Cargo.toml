@@ -1,7 +1,18 @@
 [package]
 name = "plonky2_por"
-version = "1.3.0"
-edition = "2024"
+version = "1.4.0"
+edition = "2025"
+
+[lib]
+name = "plonky2_por"
+path = "src/lib.rs"
+
+[[bin]]
+name = "plonky2_por"
+path = "src/main.rs"
+
+[features]
+default = []
 
 [dependencies]
 anyhow = "1.0.98"

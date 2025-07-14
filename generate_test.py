@@ -26,8 +26,8 @@ import itertools
 ledgers_set = {}
 assets_set = {}
 
-NUMBER_OF_ASSETS = 10
-NUMBER_OF_CUSTOMERS = 2**12
+NUMBER_OF_ASSETS = 53
+NUMBER_OF_CUSTOMERS = 32_000
 
 # generate test_assets
 
@@ -71,6 +71,7 @@ def generate_test_data():
         assets_set[asset] = data
 
     return {"assets": assets_set, "accounts": ledgers_set, "timestamp": int(time.time_ns() // 1_000_000)}
+
 
 def save_test_data_to_file(test_data, filename='private_ledger.json'):
     with open(filename, 'w') as f:

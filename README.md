@@ -154,9 +154,143 @@ This subcommand searches for all files in the current directory with the `inclus
 
 Note that the `final_proof.json` file must be present in the current directory since it is used to verify merkle tree root hash validity.
 
-## Building
+## Library API
 
-### Configurations
+This crate can be used as a library to integrate zero-knowledge proof of reserve functionality into your applications. The library provides both file-based and data-based APIs for maximum flexibility.
+
+### Core Functions
+
+#### Global Proof Generation
+
+**`prove_from_file(ledger_file_path: &str, output_dir: Option<&str>) -> Result<(FinalProof, MerkleTree, Vec<u64>)>`**
+
+Generates a global proof from a JSON file containing the private ledger data.
+
+```rust
+use plonky2_por::prove_from_file;
+
+let (final_proof, merkle_tree, account_nonces) = prove_from_file(
+    "private_ledger.json",
+    Some("output/")
+)?;
+```
+
+If None is passed to `output_dir`, no files are created and the returned data should be handled manually.
+
+**`prove_from_data(ledger: Ledger, output_dir: Option<&str>) -> Result<(FinalProof, MerkleTree, Vec<u64>)>`**
+
+Generates a global proof from already-deserialized `Ledger` data.
+
+```rust
+use plonky2_por::{prove_from_data, Ledger};
+
+let ledger_data = Ledger { /* ... */ };
+let (final_proof, merkle_tree, account_nonces) = prove_from_data(
+    ledger_data,
+    Some("output/")
+)?;
+```
+
+If None is passed to `output_dir`, no files are created and the returned data should be handled manually.
+
+#### Single User Inclusion Proof
+
+**`prove_inclusion_from_files(user_hash: &str, merkle_tree_file: &str, final_proof_file: &str, nonces_file: &str, ledger_file: &str, output_file: Option<&str>) -> Result<InclusionProof>`**
+
+Generates an inclusion proof for a specific user from files on disk.
+
+```rust
+use plonky2_por::prove_inclusion_from_files;
+
+let inclusion_proof = prove_inclusion_from_files(
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "merkle_tree.json",
+    "final_proof.json",
+    "private_nonces.json",
+    "private_ledger.json",
+    Some("inclusion_proof.json")
+)?;
+```
+
+If None is passed to `output_file`, no file is created and the returned data should be handled manually.
+
+**`prove_inclusion_from_data(user_hash: &str, merkle_tree: &MerkleTree, final_proof: &FinalProof, nonces: &[u64], ledger: &Ledger, output_file: Option<&str>) -> Result<InclusionProof>`**
+
+Generates an inclusion proof for a specific user from already-deserialized data.
+
+```rust
+use plonky2_por::{prove_inclusion_from_data, MerkleTree, FinalProof, Ledger};
+
+let inclusion_proof = prove_inclusion_from_data(
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    &merkle_tree,
+    &final_proof,
+    &nonces,
+    &ledger,
+    Some("inclusion_proof.json")
+)?;
+```
+
+If None is passed to `output_file`, no file is created and the returned data should be handled manually.
+
+#### Batched Inclusion Proofs
+
+**`prove_inclusion_batched_from_files(merkle_tree_file: &str, final_proof_file: &str, nonces_file: &str, ledger_file: &str) -> Result<()>`**
+
+Generates zstd-compressed inclusion proofs for all users from files on disk. The output files are stored in `./inclusion_proofs` directory.
+
+```rust
+use plonky2_por::prove_inclusion_batched_from_files;
+
+prove_inclusion_batched_from_files(
+    "merkle_tree.json",
+    "final_proof.json",
+    "private_nonces.json",
+    "private_ledger.json"
+)?;
+```
+
+**`prove_inclusion_batched_from_data(merkle_tree: &MerkleTree, final_proof: &FinalProof, nonces: Vec<u64>, ledger: &Ledger) -> Result<()>`**
+
+Generates inclusion proofs for all users using zstd compression from already-deserialized data. The output files are stored in `./inclusion_proofs` directory.
+
+```rust
+use plonky2_por::prove_inclusion_batched_from_data;
+
+prove_inclusion_batched_from_data(
+    &merkle_tree,
+    &final_proof,
+    nonces,
+    &ledger
+)?;
+```
+
+### Data Structures
+
+The library uses several key data structures:
+
+- **`Ledger`**: Contains timestamp, assets configuration, and user account balances
+- **`FinalProof`**: The zero-knowledge proof data
+- **`MerkleTree`**: The merkle tree structure for inclusion proofs
+- **`InclusionProof`**: Individual user inclusion proof data
+
+### Error Handling
+
+All functions return `Result<T, anyhow::Error>` to handle various error conditions including:
+- File I/O errors
+- JSON parsing errors
+- Cryptographic errors
+- Invalid data format errors
+
+### Examples
+
+See the `examples/` directory for complete working examples:
+- `examples/global_proof.rs` - Global proof generation
+- `examples/single_inclusion.rs` - Single user inclusion proof
+- `examples/batched_inclusion.rs` - Batched inclusion proofs
+- `examples/overview.rs` - Combined usage example
+
+## Building
 
 The file `config.rs` contains some configurations that can be changed to improve performance and/or make proof sizes smaller. The `BATCH_SIZE` and `RECURSIVE_SIZE` constants are the most important fields since it defines how deep will be the merkle tree and how many subproofs each recursive circuit has to prove (which is the most time-consuming operation).
 

@@ -2,18 +2,25 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use crate::types::*;
 use crate::utils::logger::*;
 use crate::{
     circuits::batch_circuit::BatchCircuit,
     circuits::circuit_registry::CircuitRegistry,
+    circuits::recursive_circuit::RecursiveCircuit,
     merkle_tree::{MerkleTree, Node},
     utils::util::*,
+    config::{BATCH_SIZE, RECURSIVE_SIZE, F, C, D},
     *,
 };
 use anyhow::Result;
 use plonky2::util::serialization::DefaultGateSerializer;
+use plonky2::hash::hash_types::HashOut;
+use plonky2::plonk::proof::ProofWithPublicInputs;
+use plonky2::plonk::circuit_data::VerifierCircuitData;
+use plonky2::plonk::config::GenericHashOut;
 use zstd;
 
 fn prove_recursively(
@@ -155,7 +162,7 @@ fn prove_recursively(
     }
 }
 
-pub fn prove_global(mut ledger: Ledger) -> Result<()> {
+pub fn prove_global(mut ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u64>)> {
     let asset_count = ledger.asset_names.len();
 
     // pad accounts to have a multiple of BATCH_SIZE
@@ -324,22 +331,8 @@ pub fn prove_global(mut ledger: Ledger) -> Result<()> {
     };
 
     log_success!("Created final proof successfully!");
-    log_info!("Serializing final proof, merkle tree and nonces into disk...");
 
-    let final_proof_json = serde_json::to_string(&final_proof).unwrap();
-    let merkle_tree_json = serde_json::to_string(&merkle_tree).unwrap();
-
-    // write the final proof and merkle tree to files
-    std::fs::write("final_proof.json", final_proof_json).unwrap();
-    std::fs::write("merkle_tree.json", merkle_tree_json).unwrap();
-
-    // create private_nonces.json
-    let nonces_json = serde_json::to_string(&account_nonces).unwrap();
-    std::fs::write("private_nonces.json", nonces_json).unwrap();
-
-    log_success!("Serialization completed successfully!");
-
-    Ok(())
+    Ok((final_proof, merkle_tree, account_nonces))
 }
 
 pub fn prove_user_inclusion(
