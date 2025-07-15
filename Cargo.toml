@@ -1,6 +1,6 @@
 [package]
 name = "plonky2_por"
-version = "1.4.1"
+version = "1.4.2"
 edition = "2024"
 description = "OtterSec plonky2 proof of reserves"
 license = "MIT OR Apache-2.0"
