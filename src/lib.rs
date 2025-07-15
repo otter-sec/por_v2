@@ -49,9 +49,9 @@ pub fn prove_from_file(ledger_file_path: &str, output_dir: Option<&str>) -> Resu
     let (final_proof, merkle_tree, account_nonces) = prove_global(ledger)?;
     
     if let Some(output_dir) = output_dir {
-        std::fs::write(output_dir, serde_json::to_string(&final_proof)?)?;
-        std::fs::write(output_dir, serde_json::to_string(&merkle_tree)?)?;
-        std::fs::write(output_dir, serde_json::to_string(&account_nonces)?)?;
+        std::fs::write(format!("{}/final_proof.json", output_dir), serde_json::to_string(&final_proof)?)?;
+        std::fs::write(format!("{}/merkle_tree.json", output_dir), serde_json::to_string(&merkle_tree)?)?;
+        std::fs::write(format!("{}/account_nonces.json", output_dir), serde_json::to_string(&account_nonces)?)?;
     }
 
     Ok((final_proof, merkle_tree, account_nonces))
@@ -63,9 +63,9 @@ pub fn prove_from_data(ledger: Ledger, output_dir: Option<&str>) -> Result<(Fina
     let (final_proof, merkle_tree, account_nonces) = prove_global(ledger)?;
     
     if let Some(output_dir) = output_dir {
-        std::fs::write(output_dir, serde_json::to_string(&final_proof)?)?;
-        std::fs::write(output_dir, serde_json::to_string(&merkle_tree)?)?;
-        std::fs::write(output_dir, serde_json::to_string(&account_nonces)?)?;
+        std::fs::write(format!("{}/final_proof.json", output_dir), serde_json::to_string(&final_proof)?)?;
+        std::fs::write(format!("{}/merkle_tree.json", output_dir), serde_json::to_string(&merkle_tree)?)?;
+        std::fs::write(format!("{}/account_nonces.json", output_dir), serde_json::to_string(&account_nonces)?)?;
     }
 
     Ok((final_proof, merkle_tree, account_nonces))
