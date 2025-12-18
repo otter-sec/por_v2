@@ -162,7 +162,12 @@ fn prove_recursively(
     }
 }
 
-pub fn prove_global(mut ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u64>)> {
+/// Like prove_global, but accepts optional pre-generated nonces for deterministic proof generation.
+/// Nonces are automatically padded with zeros to match padded account count.
+pub fn prove_global_with_nonces(
+    mut ledger: Ledger,
+    provided_nonces: Option<Vec<u64>>,
+) -> Result<(FinalProof, MerkleTree, Vec<u64>)> {
     let asset_count = ledger.asset_names.len();
 
     // pad accounts to have a multiple of BATCH_SIZE
@@ -172,6 +177,14 @@ pub fn prove_global(mut ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u
         asset_count,
         BATCH_SIZE,
     )?;
+
+    // Pad nonces with zeros to match padded accounts (if provided)
+    let provided_nonces = provided_nonces.map(|mut nonces| {
+        while nonces.len() < ledger.hashes.len() {
+            nonces.push(0u64);
+        }
+        nonces
+    });
 
     let mut progress = ProveProgress::new(ledger.account_balances.len() / BATCH_SIZE);
 
@@ -197,10 +210,13 @@ pub fn prove_global(mut ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u
             let userhash = ledger.hashes[count * BATCH_SIZE + i].clone();
             let balances = chunk[i].clone();
 
-            // generate a random nonce as security against brute force attacks to discover user balances
+            // Use provided nonce or generate random one as security against brute force attacks
             // MAKE SURE THIS ITERATION IS NOT PARALLELIZED, OTHERWISE THE NONCES VECTOR
             // WILL NOT BE ORDERED CORRECTLY
-            let nonce = rand::random::<u64>();
+            let nonce = match &provided_nonces {
+                Some(nonces) => nonces[count * BATCH_SIZE + i],
+                None => rand::random::<u64>(),
+            };
             account_nonces.push(nonce);
 
             let hash = hash_account(&balances, userhash, nonce);
@@ -333,6 +349,11 @@ pub fn prove_global(mut ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u
     log_success!("Created final proof successfully!");
 
     Ok((final_proof, merkle_tree, account_nonces))
+}
+
+/// Generates a global proof of reserves using random nonces.
+pub fn prove_global(ledger: Ledger) -> Result<(FinalProof, MerkleTree, Vec<u64>)> {
+    prove_global_with_nonces(ledger, None)
 }
 
 pub fn prove_user_inclusion(
@@ -533,4 +554,66 @@ pub fn prove_inclusion_all(
     }
 
     processing_result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::LedgerDecimals;
+
+    fn create_test_ledger() -> Ledger {
+        Ledger {
+            asset_names: vec!["0x0000000000000000000000000000000000000001".to_string()],
+            hashes: vec![
+                "a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1".to_string(),
+                "b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2d3e4f5a0b1c2".to_string(),
+            ],
+            account_balances: vec![
+                vec![1_000_000i64],
+                vec![2_000_000i64],
+            ],
+            asset_prices: vec![1_000_000_000_000_000_000u64], // $1 with 18 decimals
+            asset_decimals: vec![LedgerDecimals {
+                usdt_decimals: 18,
+                balance_decimals: 6,
+            }],
+            timestamp: 1700000000,
+        }
+    }
+
+    #[test]
+    fn test_same_nonces_produce_same_root() {
+        let ledger1 = create_test_ledger();
+        let ledger2 = create_test_ledger();
+
+        // Generate proof with random nonces
+        let (_, tree1, nonces) = prove_global(ledger1).unwrap();
+
+        // Generate proof with SAME nonces
+        let (_, tree2, _) = prove_global_with_nonces(ledger2, Some(nonces)).unwrap();
+
+        // Roots MUST match
+        assert_eq!(
+            tree1.root.hash().as_ref().unwrap(),
+            tree2.root.hash().as_ref().unwrap(),
+            "Same nonces should produce identical roots"
+        );
+    }
+
+    #[test]
+    fn test_different_nonces_produce_different_roots() {
+        let ledger1 = create_test_ledger();
+        let ledger2 = create_test_ledger();
+
+        // Generate two proofs with random (different) nonces
+        let (_, tree1, _) = prove_global(ledger1).unwrap();
+        let (_, tree2, _) = prove_global(ledger2).unwrap();
+
+        // Roots should be different (extremely high probability)
+        assert_ne!(
+            tree1.root.hash().as_ref().unwrap(),
+            tree2.root.hash().as_ref().unwrap(),
+            "Different nonces should produce different roots"
+        );
+    }
 }

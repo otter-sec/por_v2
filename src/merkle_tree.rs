@@ -33,6 +33,11 @@ impl Node {
         self.children = Some(children);
     }
 
+    /// Returns a mutable reference to the children
+    pub fn children_mut(&mut self) -> Option<&mut Vec<Node>> {
+        self.children.as_mut()
+    }
+
     fn collect_nodes_at_depth_mut<'a>(
         &'a mut self,
         target_depth: usize,
